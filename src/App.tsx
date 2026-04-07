@@ -483,11 +483,16 @@ export default function App() {
 
   const sortedConversations = useMemo(() => {
     return [...conversations].sort((a, b) => {
+      const unreadA = (unreadByConversation[a.id] ?? 0) > 0 ? 1 : 0;
+      const unreadB = (unreadByConversation[b.id] ?? 0) > 0 ? 1 : 0;
+      if (unreadA !== unreadB) {
+        return unreadB - unreadA;
+      }
       const ta = new Date(a.updatedAt).getTime();
       const tb = new Date(b.updatedAt).getTime();
       return tb - ta;
     });
-  }, [conversations]);
+  }, [conversations, unreadByConversation]);
 
   const sortedTenantPeers = useMemo(() => {
     const byId = new Map<string, TenantUser>();
@@ -624,6 +629,26 @@ export default function App() {
       next[existingIndex] = normalized;
       return next;
     });
+  };
+
+  /** Keep sidebar order in sync with latest message without waiting for a full refresh */
+  const bumpConversationUpdatedAt = (conversationId: string, iso: string): void => {
+    setConversations((previous) =>
+      previous.map((c) => {
+        if (c.id !== conversationId) {
+          return c;
+        }
+        const nextT = new Date(iso).getTime();
+        const curT = new Date(c.updatedAt).getTime();
+        if (Number.isNaN(nextT)) {
+          return c;
+        }
+        if (!Number.isNaN(curT) && curT > nextT) {
+          return c;
+        }
+        return { ...c, updatedAt: iso };
+      })
+    );
   };
 
   const getConversationTitle = (conversation: Conversation): string => {
@@ -820,6 +845,8 @@ export default function App() {
     newSocket.on('disconnect', onSocketDisconnect);
 
     newSocket.on('message_received', (message: Message) => {
+      bumpConversationUpdatedAt(message.conversationId, message.createdAt);
+
       const isOwnMessage = message.senderId === user?.id;
       if (!isOwnMessage) {
         newSocket.emit('mark_as_delivered', { messageId: message.id }, () => undefined);
@@ -1449,6 +1476,7 @@ export default function App() {
         content: text.trim()
       });
       upsertMessage(message);
+      bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
       setText('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -1468,6 +1496,7 @@ export default function App() {
         content: uploaded.url
       });
       upsertMessage(message);
+      bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     }
@@ -1875,10 +1904,20 @@ export default function App() {
               </div>
             );
 
+            const convTitle = getConversationTitle(conversation);
+
             return (
               <button
                 key={conversation.id}
-                className={`conversation-item ${conversation.id === selectedConversationId ? 'active' : ''}`}
+                type="button"
+                className={`conversation-item ${conversation.id === selectedConversationId ? 'active' : ''}${
+                  unreadCount > 0 ? ' conversation-item--unread' : ''
+                }`}
+                aria-label={
+                  unreadCount > 0
+                    ? `${convTitle}, ${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
+                    : convTitle
+                }
                 onClick={() => void selectConversation(conversation.id)}
               >
                 {listOtherId !== undefined && !isGlobalConversation(conversation) ? (
@@ -1888,8 +1927,12 @@ export default function App() {
                 )}
                 <div className="conversation-meta">
                   <div className="conversation-meta-top">
-                    <strong>{getConversationTitle(conversation)}</strong>
-                    {unreadCount > 0 && <span className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+                    <strong>{convTitle}</strong>
+                    {unreadCount > 0 && (
+                      <span className="unread-badge" aria-hidden>
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
                   </div>
                   <span>{getConversationSubtitle(conversation)}</span>
                 </div>
@@ -1975,126 +2018,128 @@ export default function App() {
                     <div
                       className={`message-cluster ${isMine ? 'mine' : 'theirs'}${menuOpen ? ' message-cluster--menu-open' : ''}`}
                     >
-                      {!message.deletedAt && (
-                        <div className="message-hover-actions">
-                          <div className="message-reaction-strip" role="toolbar" aria-label="Quick reactions">
-                            {QUICK_REACTION_EMOJIS.map((emoji) => (
+                      <div className="message-content-stack">
+                        {!message.deletedAt && (
+                          <div className="message-hover-actions">
+                            <div className="message-reaction-strip" role="toolbar" aria-label="Quick reactions">
+                              {QUICK_REACTION_EMOJIS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  className="message-reaction-strip-btn"
+                                  aria-label={`React ${emoji}`}
+                                  onClick={() => handleReact(message.id, emoji)}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="message-more-wrap" data-message-menu-root={message.id}>
                               <button
-                                key={emoji}
                                 type="button"
-                                className="message-reaction-strip-btn"
-                                aria-label={`React ${emoji}`}
-                                onClick={() => handleReact(message.id, emoji)}
+                                className="message-more-btn"
+                                aria-expanded={menuOpen}
+                                aria-haspopup="menu"
+                                aria-label="Message actions"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setMessageActionsMenuId((current) => (current === message.id ? null : message.id));
+                                }}
                               >
-                                {emoji}
+                                ⋮
                               </button>
-                            ))}
-                          </div>
-                          <div className="message-more-wrap" data-message-menu-root={message.id}>
-                            <button
-                              type="button"
-                              className="message-more-btn"
-                              aria-expanded={menuOpen}
-                              aria-haspopup="menu"
-                              aria-label="Message actions"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setMessageActionsMenuId((current) => (current === message.id ? null : message.id));
-                              }}
-                            >
-                              ⋮
-                            </button>
-                            {menuOpen && (
-                              <div className="message-actions-dropdown" role="menu">
-                                <div className="message-actions-reactions" role="none">
-                                  <span className="message-actions-reactions-label">React</span>
-                                  <div className="message-actions-reactions-row" role="group">
-                                    {QUICK_REACTION_EMOJIS.map((emoji) => (
-                                      <button
-                                        key={emoji}
-                                        type="button"
-                                        role="menuitem"
-                                        className="message-actions-emoji-btn"
-                                        aria-label={`React ${emoji}`}
-                                        onClick={() => handleReact(message.id, emoji)}
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ))}
+                              {menuOpen && (
+                                <div className="message-actions-dropdown" role="menu">
+                                  <div className="message-actions-reactions" role="none">
+                                    <span className="message-actions-reactions-label">React</span>
+                                    <div className="message-actions-reactions-row" role="group">
+                                      {QUICK_REACTION_EMOJIS.map((emoji) => (
+                                        <button
+                                          key={emoji}
+                                          type="button"
+                                          role="menuitem"
+                                          className="message-actions-emoji-btn"
+                                          aria-label={`React ${emoji}`}
+                                          onClick={() => handleReact(message.id, emoji)}
+                                        >
+                                          {emoji}
+                                        </button>
+                                      ))}
+                                    </div>
                                   </div>
+                                  {!isMine && (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      className="message-actions-item"
+                                      onClick={() => {
+                                        setMessageActionsMenuId(null);
+                                        void handleMarkRead(message.id);
+                                      }}
+                                    >
+                                      Mark as read
+                                    </button>
+                                  )}
+                                  {isMine && (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      className="message-actions-item message-actions-item-danger"
+                                      onClick={() => {
+                                        setMessageActionsMenuId(null);
+                                        void handleDelete(message.id);
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
                                 </div>
-                                {!isMine && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="message-actions-item"
-                                    onClick={() => {
-                                      setMessageActionsMenuId(null);
-                                      void handleMarkRead(message.id);
-                                    }}
-                                  >
-                                    Mark as read
-                                  </button>
-                                )}
-                                {isMine && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="message-actions-item message-actions-item-danger"
-                                    onClick={() => {
-                                      setMessageActionsMenuId(null);
-                                      void handleDelete(message.id);
-                                    }}
-                                  >
-                                    Delete
-                                  </button>
-                                )}
-                              </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        <article className={`message-bubble ${isMine ? 'mine' : 'theirs'}`}>
+                          {showSenderLabel && (
+                            <div className="message-label">{getSenderLabel(message.senderId)}</div>
+                          )}
+                          {message.deletedAt ? (
+                            <em className="deleted">Message deleted</em>
+                          ) : getMessageType(message) === 'IMAGE' ? (
+                            <img src={toAbsoluteMediaUrl(message.content)} alt="Uploaded" />
+                          ) : getMessageType(message) === 'VOICE' ? (
+                            <audio controls src={toAbsoluteMediaUrl(message.content)} />
+                          ) : (
+                            <p>{message.content}</p>
+                          )}
+
+                          <div className="message-info">
+                            <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                            {status && (
+                              <span className={`message-status ${status}`} aria-label={`Message ${status}`}>
+                                {status === 'sent' ? '✓' : '✓✓'}
+                              </span>
                             )}
                           </div>
-                        </div>
-                      )}
+                        </article>
 
-                      <article className={`message-bubble ${isMine ? 'mine' : 'theirs'}`}>
-                        {showSenderLabel && (
-                          <div className="message-label">{getSenderLabel(message.senderId)}</div>
+                        {!message.deletedAt && (message.reactions ?? []).length > 0 && (
+                          <div className="message-reactions message-reactions-below" aria-label="Reactions">
+                            {summarizeReactions(message.reactions ?? [], user.id).map((group) => (
+                              <span
+                                key={group.emoji}
+                                className={`message-reaction-chip ${group.mine ? 'message-reaction-chip--mine' : ''}`}
+                                title={group.title}
+                              >
+                                <span className="message-reaction-emoji">{group.emoji}</span>
+                                {group.count > 1 && (
+                                  <span className="message-reaction-count">{group.count}</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
                         )}
-                        {message.deletedAt ? (
-                          <em className="deleted">Message deleted</em>
-                        ) : getMessageType(message) === 'IMAGE' ? (
-                          <img src={toAbsoluteMediaUrl(message.content)} alt="Uploaded" />
-                        ) : getMessageType(message) === 'VOICE' ? (
-                          <audio controls src={toAbsoluteMediaUrl(message.content)} />
-                        ) : (
-                          <p>{message.content}</p>
-                        )}
-
-                        <div className="message-info">
-                          <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                          {status && (
-                            <span className={`message-status ${status}`} aria-label={`Message ${status}`}>
-                              {status === 'sent' ? '✓' : '✓✓'}
-                            </span>
-                          )}
-                        </div>
-                      </article>
-
-                      {!message.deletedAt && (message.reactions ?? []).length > 0 && (
-                        <div className="message-reactions message-reactions-below" aria-label="Reactions">
-                          {summarizeReactions(message.reactions ?? [], user.id).map((group) => (
-                            <span
-                              key={group.emoji}
-                              className={`message-reaction-chip ${group.mine ? 'message-reaction-chip--mine' : ''}`}
-                              title={group.title}
-                            >
-                              <span className="message-reaction-emoji">{group.emoji}</span>
-                              {group.count > 1 && (
-                                <span className="message-reaction-count">{group.count}</span>
-                              )}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      </div>
                     </div>
                   </div>
                 );
