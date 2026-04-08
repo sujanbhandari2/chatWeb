@@ -1,0 +1,190 @@
+---
+alwaysApply: true
+---
+
+You are working in a React + TypeScript codebase that follows a strict 4-layer architecture. Follow every rule below when generating, editing, or reviewing code.
+
+## Layer Structure (strict import direction)
+
+```
+pages/ & features/ & common/  ←  hooks/  ←  services/  ←  api/
+```
+
+Shared layers (`types/`, `constants/`, `schemas/`, `utils/`, `lib/`, `contexts/`, `store/`) are importable by any layer.
+
+### api/ — Pure HTTP
+
+- One file per domain: `{domain}.api.ts`
+- Uses `apiService` from `lib/api-service.ts`
+- Routes from `constants/api.constants.ts`
+- No React. Returns typed `Promise<T>`.
+- Function naming: **verb + noun** (`loginUser`, `getContacts`, `deleteContact`)
+
+```typescript
+// CORRECT
+export const loginUser = (body: LoginRequest): Promise<LoginResponse> =>
+  apiService.post<LoginResponse>(API.AUTH.LOGIN, body);
+```
+
+### services/ — React Query Layer ONLY
+
+- One file per domain: `{domain}.service.ts`
+- Contains ONLY: `useQuery`, `useMutation`, query key factories, `onError` toasts
+- Hook naming: `use*Query` / `use*Mutation`
+- Key factory naming: `{domain}Keys`
+- Imports from `api/` and `utils/`. NEVER pure data, constants, or helpers here.
+- Form-backed mutations: NO toast, errors shown inline via `mutation.error.message`
+- Fire-and-forget mutations: toast via `onError`
+
+```typescript
+// CORRECT
+export const authKeys = {
+  all: ["auth"] as const,
+  session: () => [...authKeys.all, "session"] as const,
+};
+
+export const useLoginMutation = () =>
+  useMutation({ mutationFn: authAPI.loginUser });
+```
+
+### hooks/ — Feature / Orchestration
+
+- File naming: `use{Feature}.ts`
+- Imports from `services/`, `contexts/`, `utils/`, `types/`
+- NEVER imports from `api/`
+- NEVER contains `useQuery` or `useMutation` — those belong in `services/`
+- Only create a hook when there is real orchestration logic. For simple mutations, pages may import from `services/` directly.
+- Prefer not importing from `features/` in hooks; if needed, only for co-located types/constants (ideally move to `types/`).
+
+### pages/ — Route screens
+
+- Full screens: `pages/{route-path}/{Feature}View.tsx`
+- Compose `features/`, `common/`, hooks, services
+- NEVER import from `api/`
+
+### features/ — Domain UI modules
+
+- Domain pieces: `features/{domain}/PascalCase.tsx` (e.g. `features/contact/ContactsTable.tsx`)
+- Import from `common/` (NDS, layout, shared), `hooks/`, `services/`, `schemas/`, `types/`, `utils/`
+- NEVER import from `api/`
+
+### common/ — Shared UI only
+
+- `common/nds/`, `common/layout/`, `common/shared/`, `common/auth/AuthGuard.tsx`
+- NEVER import from `api/`
+
+## Shared Layers
+
+| Layer | File pattern | Contents |
+|---|---|---|
+| `types/` | `{domain}.types.ts` | Interfaces, type aliases, type guards |
+| `constants/` | `{domain}.constants.ts` | API routes, regex, UI copy, enums, static config |
+| `schemas/` | `{domain}.schemas.ts` | Zod schemas + `z.infer` form types |
+| `utils/` | `{domain}.utils.ts` | Pure helpers, adapters, storage. No React. |
+| `lib/` | descriptive name | Infrastructure only (`axios.ts`, `api-service.ts`, `api-error.ts`) |
+| `contexts/` | `{Name}Context.tsx` | React Context providers |
+| `store/` | `use{Name}Store.ts` | Zustand stores |
+
+## Naming Conventions
+
+| What | Convention | Example |
+|---|---|---|
+| API files | `{domain}.api.ts` | `auth.api.ts` |
+| Service files | `{domain}.service.ts` | `contacts.service.ts` |
+| Hook files | `use{Feature}.ts` | `useSession.ts` |
+| Type files | `{domain}.types.ts` | `auth.types.ts` |
+| Constant files | `{domain}.constants.ts` | `api.constants.ts` |
+| Schema files | `{domain}.schemas.ts` | `auth.schemas.ts` |
+| Util files | `{domain}.utils.ts` | `format.utils.ts` |
+| React components | `PascalCase.tsx` | `MfaModal.tsx` |
+| Page screens | `{Feature}View.tsx` in `pages/` | `LoginView.tsx` |
+| Feature UI | `PascalCase.tsx` in `features/{domain}/` | `ContactsTable.tsx` |
+| API functions | verb + noun | `loginUser`, `getContacts` |
+| Service hooks | `use*Query` / `use*Mutation` | `useLoginMutation` |
+| Query key factories | `{domain}Keys` | `authKeys` |
+| Feature hooks | `use` + domain verb | `useSession` |
+| Util functions | verb + noun | `formatCurrency`, `mapLoginResponse` |
+| Type guards | `is` + condition | `isMfaRequired` |
+| Zod schemas | `{name}Schema` | `loginSchema` |
+| Inferred form types | `{Name}FormValues` | `LoginFormValues` |
+
+## Technology Rules
+
+### Forms
+Use React Hook Form + `zodResolver` + Zod schema. NEVER manual `useState` validation.
+
+```typescript
+const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
+  resolver: zodResolver(loginSchema),
+  defaultValues: { email: "", password: "", rememberMe: false },
+});
+```
+
+### API Calls
+Use `apiService` from `lib/api-service.ts`. NEVER raw `fetch`. NEVER import `lib/axios.ts` directly in `api/` files.
+
+### Error Handling
+- `lib/axios.ts` — auth header + 401 redirect only
+- `lib/api-error.ts` — `ApiError.from()` normalizes error messages
+- `lib/api-service.ts` — wraps axios, throws `ApiError`
+- Services decide display: toast (`onError`) or inline (`mutation.error`)
+
+### Server State
+Use `@tanstack/react-query`. NEVER `useEffect` + `useState` for data fetching.
+
+### Client State
+Zustand stores in `store/`. Keep stores minimal — only persistent/global state.
+
+### Toasts
+Use `toast()` from `common/nds/NdsToaster`. NEVER duplicate toast + inline error for same failure.
+
+### Modal Form Reset
+Reset on open, not on close:
+```typescript
+useEffect(() => {
+  if (open) { reset(defaultValues); mutation.reset(); }
+}, [open]);
+```
+
+## Anti-Patterns — NEVER do these
+
+- NEVER import `api/` in `hooks/`, `common/`, `pages/`, or `features/` — go through `services/`
+- NEVER put `useQuery`/`useMutation` in `hooks/` — they belong in `services/`
+- NEVER duplicate error handling (toast AND inline for same error)
+- NEVER use manual `useState` validation when Zod + React Hook Form is available
+- NEVER use `useEffect` + `useState` for API data fetching — use React Query
+- NEVER define interfaces in hooks, mocks, or components — put in `types/`
+- NEVER put constants in `services/` or `utils/` — put in `constants/`
+- NEVER import `common/` in `hooks/` — extract shared items to `types/` or `constants/`
+- NEVER create new toast utilities — use existing `toast()` from NdsToaster
+
+## Adding a New Domain
+
+When creating a new feature domain (e.g., "invoices"), create files in this order:
+
+1. `src/types/invoice.types.ts`
+2. `src/constants/invoice.constants.ts` (API routes)
+3. `src/schemas/invoice.schemas.ts` (Zod + form types)
+4. `src/api/invoice.api.ts`
+5. `src/services/invoice.service.ts`
+6. `src/hooks/useInvoices.ts` (only if orchestration needed)
+7. `src/features/invoice/` (domain UI: modals, tables)
+8. `src/pages/invoices/InvoicesView.tsx` (full screen)
+9. Register route in `src/router/routes.ts`
+
+## Existing Patterns to Follow
+
+Look at these files as reference implementations:
+- **API**: `src/api/auth.api.ts`
+- **Service**: `src/services/auth.service.ts`, `src/services/contacts.service.ts`
+- **Hook**: `src/hooks/useSession.ts`
+- **Page with RHF**: `src/pages/login/LoginView.tsx`
+- **Feature modal with service**: `src/features/auth/ForgotPasswordModal.tsx`
+- **Types**: `src/types/auth.types.ts`
+- **Error class**: `src/lib/api-error.ts`
+- **Settings page (inline edit)**: `src/pages/settings/price-adjustment/PriceAdjustmentDriversView.tsx`
+- **Settings page (table + notes)**: `src/pages/settings/project-pnl/ProjectPnlView.tsx`
+
+---
+alwaysApply: true
+---

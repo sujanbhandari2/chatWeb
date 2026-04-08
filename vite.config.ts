@@ -5,5 +5,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        widget: 'widget.html',
+        config: 'config.html'
+      }
+    }
   }
 });

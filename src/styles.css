@@ -4,6 +4,13 @@
   background: linear-gradient(140deg, #eaf2ff 0%, #f8fbff 50%, #eef2ff 100%);
 }
 
+html.healthchat-widget-entry,
+body.healthchat-widget-entry {
+  margin: 0;
+  min-height: 100%;
+  background: transparent !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -161,6 +168,104 @@ button {
   margin: 0;
   color: #475569;
   font-size: 0.85rem;
+}
+
+.widget-overview-chats-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: center;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.rail-menu-dropdown--align-end {
+  left: auto;
+  right: 0;
+}
+
+/* Widget Chats row: ⋮ left, search fills the rest */
+.widget-chats-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.65rem;
+}
+
+.widget-chats-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 25;
+}
+
+.widget-chats-overflow-btn {
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.rail-menu-dropdown--widget-chats-row {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  z-index: 30;
+  min-width: 10.5rem;
+}
+
+.rail-menu-item--widget-suggest {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.left-header--widget-people {
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.widget-people-back {
+  flex-shrink: 0;
+  border: 1px solid #dbe5f4;
+  border-radius: 10px;
+  padding: 0.4rem 0.65rem;
+  background: #ffffff;
+  color: #1e3a5f;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.widget-people-back:hover {
+  background: #f1f6ff;
+}
+
+.widget-people-subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.widget-chats-search-label {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.widget-chats-search-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.widget-chats-empty-hint {
+  padding: 0.5rem 0.35rem 0.75rem;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .avatar-pill {
@@ -1748,5 +1853,314 @@ label.composer-icon-btn {
 
   .chat-stage {
     min-height: 62vh;
+  }
+}
+
+/* Embeddable widget: panel-sized layout (not full viewport) */
+.chat-widget-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e4e6eb;
+  flex-shrink: 0;
+}
+
+.chat-widget-panel-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #0f172a;
+  min-width: 0;
+}
+
+.chat-widget-panel-title--placeholder {
+  min-height: 1.2em;
+}
+
+.chat-widget-panel-close {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.chat-widget-panel-close:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.chat-widget-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-widget-panel-body > .auth-shell,
+.chat-widget-panel-body > .messenger-shell {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.auth-shell--widget {
+  min-height: 0;
+  height: 100%;
+  padding: 0.5rem;
+  align-self: stretch;
+}
+
+.auth-shell--widget .auth-card {
+  width: 100%;
+  max-width: none;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+/* Widget: single column; list and chat occupy the same cell (toggle visibility). */
+.messenger-shell--widget {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.messenger-shell--widget > .left-rail,
+.messenger-shell--widget > .chat-stage {
+  grid-area: 1 / 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.messenger-shell--widget > .left-rail {
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  border-right: none;
+}
+
+.messenger-shell--widget > .chat-stage {
+  z-index: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.messenger-shell--widget.messenger-shell--widget-chat > .left-rail {
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.messenger-shell--widget.messenger-shell--widget-chat > .chat-stage {
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.left-rail--widget-full {
+  flex: 1;
+}
+
+.left-rail-scroll--widget-order {
+  display: flex;
+  flex-direction: column;
+}
+
+.left-rail-scroll--widget-order .conversation-list {
+  order: 1;
+}
+
+.left-rail-scroll--widget-order .quick-chat {
+  order: 2;
+}
+
+.chat-stage--widget {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  overflow: hidden;
+}
+
+.chat-header-back {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-right: 0.35rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #1d4ed8;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.chat-header-back:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+/*
+ * Widget / narrow chat: layout must NOT rely on viewport @media (iframe can be 380px wide
+ * while the outer browser is 1200px). Scope “mobile” composer + density to .chat-stage--widget.
+ */
+.chat-stage--widget .chat-header {
+  align-items: center;
+  padding: 0.45rem 0.55rem;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+}
+
+.chat-stage--widget .chat-header-main {
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.chat-stage--widget .chat-header .avatar-pill {
+  width: 38px;
+  height: 38px;
+  font-size: 0.85rem;
+}
+
+.chat-stage--widget .chat-header-titles h3 {
+  font-size: 0.92rem;
+}
+
+.chat-stage--widget .chat-header-titles p {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.chat-stage--widget .message-scroller {
+  padding: 0.45rem 0.55rem 0.65rem;
+  gap: 0.3rem;
+}
+
+.chat-stage--widget .message-cluster {
+  max-width: min(94%, calc(100% - 4px));
+}
+
+.chat-stage--widget .message-bubble {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.chat-stage--widget .message-bubble p {
+  font-size: 0.9rem;
+}
+
+.chat-stage--widget .message-bubble img,
+.chat-stage--widget .message-bubble audio {
+  max-width: 100%;
+  width: auto;
+  height: auto;
+}
+
+.chat-stage--widget .message-msgr-select {
+  max-width: 100%;
+}
+
+.chat-stage--widget .composer-bar {
+  flex-wrap: wrap;
+  padding: 0.45rem 0.5rem;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.chat-stage--widget .composer-input {
+  min-width: 0;
+  width: 100%;
+  flex: 1 1 100%;
+  order: -1;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.chat-stage--widget .composer-actions {
+  width: 100%;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chat-stage--widget .composer-icon-btn {
+  width: 2.45rem;
+  height: 2.45rem;
+}
+
+.chat-stage--widget .recording-bar {
+  flex-wrap: wrap;
+  row-gap: 0.45rem;
+  padding: 0.5rem 0.55rem;
+}
+
+.chat-stage--widget .recording-bar-center {
+  order: 3;
+  flex: 1 1 100%;
+  justify-content: center;
+}
+
+.chat-stage--widget .modal-backdrop {
+  padding: 0.5rem;
+  align-items: flex-end;
+}
+
+.chat-stage--widget .modal-dialog {
+  max-width: 100%;
+  width: 100%;
+  max-height: min(88dvh, 640px);
+  margin: 0;
+  border-radius: 16px 16px 0 0;
+}
+
+@media (min-width: 480px) {
+  .chat-stage--widget .modal-backdrop {
+    align-items: center;
+  }
+
+  .chat-stage--widget .modal-dialog {
+    max-width: min(460px, 100%);
+    border-radius: 18px;
+    margin: auto;
+  }
+}
+
+/* Full app on narrow viewports: same composer wrap when shell is stacked (existing 980px rule). */
+@media (max-width: 980px) {
+  .messenger-shell:not(.messenger-shell--widget) .chat-stage .composer-bar {
+    flex-wrap: wrap;
+  }
+
+  .messenger-shell:not(.messenger-shell--widget) .chat-stage .composer-input {
+    min-width: 100%;
+    flex: 1 1 100%;
+    order: -1;
+  }
+
+  .messenger-shell:not(.messenger-shell--widget) .chat-stage .composer-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }

@@ -1,0 +1,189 @@
+.hc-config-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 2.5rem;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.hc-config-header {
+  margin-bottom: 1.5rem;
+}
+
+.hc-config-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.hc-config-header p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  max-width: 52rem;
+}
+
+.hc-config-header code {
+  font-size: 0.85em;
+  background: #e2e8f0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.hc-config-layout {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .hc-config-layout {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.hc-config-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.hc-config-panel h2 {
+  margin: 0 0 0.85rem;
+  font-size: 1.05rem;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 0.5rem;
+}
+
+.hc-config-field {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.hc-config-field:last-child {
+  margin-bottom: 0;
+}
+
+.hc-config-field label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hc-config-field input[type='text'],
+.hc-config-field input[type='number'],
+.hc-config-field input[type='url'],
+.hc-config-field select,
+.hc-config-field textarea {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hc-config-field textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.hc-config-field input:focus,
+.hc-config-field select:focus,
+.hc-config-field textarea:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  border-color: #93c5fd;
+}
+
+.hc-config-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.hc-config-check input {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.hc-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.hc-config-actions button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.88rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  border: 0;
+  cursor: pointer;
+}
+
+.hc-config-btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.hc-config-btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.hc-config-btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.hc-config-btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.hc-config-error {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.hc-config-preview-frame-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e2e8f0;
+  min-height: 560px;
+}
+
+.hc-config-preview-frame-wrap iframe {
+  display: block;
+  width: 100%;
+  height: min(680px, 85vh);
+  border: 0;
+}
+
+.hc-config-footnote {
+  margin-top: 1.5rem;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.hc-config-footnote a {
+  color: #2563eb;
+}
