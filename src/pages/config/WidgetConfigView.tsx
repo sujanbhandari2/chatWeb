@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react';
-import { buildWidgetIframeSrc } from '../../utils/widget-runtime.utils';
-import { defaultWidgetInitConfig, widgetInitConfigSchema, type WidgetInitConfig } from '../../schemas/widget.schemas';
+import { configs, widgetConfigExamples } from '../../config/widget.config';
+import { buildWidgetIframeSrc, mergeWidgetPartials } from '../../utils/widget-runtime.utils';
+import {
+  defaultWidgetInitConfig,
+  mergeConfig,
+  widgetInitConfigSchema,
+  type DeepPartialWidgetConfig,
+  type WidgetInitConfig
+} from '../../schemas/widget.schemas';
 import './configurator.css';
 
 function widgetBaseDefault(): string {
@@ -12,11 +19,44 @@ function widgetBaseDefault(): string {
   return `${window.location.origin}${normalized}widget.html`;
 }
 
+const dc = defaultWidgetInitConfig.colors!;
+const dt = defaultWidgetInitConfig.typography!;
+const ds = defaultWidgetInitConfig.spacing!;
+const dl = defaultWidgetInitConfig.launcher!;
+
+function ColorHexField({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}): JSX.Element {
+  const pickerValue = /^#[0-9A-Fa-f]{6}$/.test(value) ? value : '#000000';
+  return (
+    <div className="hc-config-field">
+      <label>{label}</label>
+      <div className="hc-config-color-row">
+        <input
+          type="color"
+          aria-label={`${label} color picker`}
+          value={pickerValue}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder="#rrggbb" />
+      </div>
+    </div>
+  );
+}
+
 export function WidgetConfigView(): JSX.Element {
   const [baseUrl, setBaseUrl] = useState(widgetBaseDefault);
-  const [cfg, setCfg] = useState<WidgetInitConfig>(() => ({ ...defaultWidgetInitConfig }));
+  const [cfg, setCfg] = useState<WidgetInitConfig>(() => mergeConfig({}));
   const [previewNonce, setPreviewNonce] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [copiedJson, setCopiedJson] = useState(false);
+  const [presetKey, setPresetKey] = useState('');
 
   const { iframeSrc, error } = useMemo(() => {
     const parsed = widgetInitConfigSchema.safeParse(cfg);
@@ -24,14 +64,47 @@ export function WidgetConfigView(): JSX.Element {
       return { iframeSrc: '', error: parsed.error.message };
     }
     try {
-      return { iframeSrc: buildWidgetIframeSrc(baseUrl, parsed.data), error: null };
+      return {
+        iframeSrc: buildWidgetIframeSrc(baseUrl, parsed.data, { configuratorPreview: true }),
+        error: null
+      };
     } catch {
       return { iframeSrc: '', error: 'Invalid widget base URL.' };
     }
   }, [baseUrl, cfg]);
 
-  const patch = (partial: Partial<WidgetInitConfig>): void => {
-    setCfg((c) => ({ ...c, ...partial }));
+  const patch = (partial: DeepPartialWidgetConfig): void => {
+    setCfg((c) => mergeConfig(mergeWidgetPartials(c, partial)));
+  };
+
+  const patchLauncherBadge = (
+    partial: Partial<NonNullable<NonNullable<WidgetInitConfig['launcher']>['badge']>>
+  ): void => {
+    const b = cfg.launcher?.badge;
+    patch({
+      launcher: {
+        badge: {
+          enabled: b?.enabled ?? false,
+          backgroundColor: b?.backgroundColor ?? '#ef4444',
+          textColor: b?.textColor ?? '#ffffff',
+          count: b?.count,
+          ...partial
+        }
+      }
+    });
+  };
+
+  const applyPreset = (key: string): void => {
+    if (key === '__defaults__') {
+      setCfg(mergeConfig({}));
+    } else if (key.startsWith('profile:')) {
+      const name = key.slice('profile:'.length) as keyof typeof configs;
+      setCfg(structuredClone(configs[name] as WidgetInitConfig));
+    } else if (key.startsWith('example:')) {
+      const name = key.slice('example:'.length) as keyof typeof widgetConfigExamples;
+      setCfg(structuredClone(widgetConfigExamples[name] as WidgetInitConfig));
+    }
+    setPresetKey('');
   };
 
   const copyUrl = async (): Promise<void> => {
@@ -47,20 +120,68 @@ export function WidgetConfigView(): JSX.Element {
     }
   };
 
+  const copyFullJson = async (): Promise<void> => {
+    const parsed = widgetInitConfigSchema.safeParse(cfg);
+    if (!parsed.success) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(parsed.data, null, 2));
+      setCopiedJson(true);
+      window.setTimeout(() => setCopiedJson(false), 2000);
+    } catch {
+      setCopiedJson(false);
+    }
+  };
+
+  const colors = cfg.colors ?? dc;
+  const text = colors.text ?? dc.text!;
+  const status = colors.status ?? dc.status!;
+  const typo = cfg.typography ?? dt;
+  const fs = typo.fontSize ?? dt.fontSize!;
+
   return (
     <div className="hc-config-page">
       <header className="hc-config-header">
         <h1>HealthChat widget configurator</h1>
         <p>
-          This page is the <strong>visual editor</strong> for embed settings. It drives the same{' '}
-          <code>WidgetInitConfig</code> as URL query params, <code>window.__HEALTHCHAT_WIDGET_CONFIG__</code>, and{' '}
-          <code>widget.config.example.json</code>. Use <strong>Update preview</strong> to reload the iframe after
-          changes.
+          Edit the full <code>WidgetInitConfig</code> (same shape as <code>src/config/widget.config.ts</code>). Load
+          built-in <strong>profiles</strong> and <strong>examples</strong> from that file, then use{' '}
+          <strong>Copy full JSON</strong> to paste into your profile in source. With <code>npm run dev</code>, the{' '}
+          <strong>live iframe</strong> also receives <strong>theme colors</strong> (preview flag + color query params).
+          API URLs, panel title, typography, and other profile fields still ship via <code>widget.config.ts</code> for
+          production; production widget builds ignore color query overrides.
         </p>
       </header>
 
       <div className="hc-config-layout">
         <div className="hc-config-panel">
+          <h2>Presets (widget.config.ts)</h2>
+          <select
+            className="hc-config-preset-select"
+            value={presetKey}
+            onChange={(e) => {
+              const k = e.target.value;
+              if (k) {
+                applyPreset(k);
+              }
+            }}
+          >
+            <option value="">Load preset…</option>
+            <option value="__defaults__">Schema defaults</option>
+            <optgroup label="Env profiles (configs.*)">
+              <option value="profile:development">development</option>
+              <option value="profile:staging">staging</option>
+              <option value="profile:production">production</option>
+            </optgroup>
+            <optgroup label="Examples (widgetConfigExamples.*)">
+              <option value="example:custom">custom</option>
+              <option value="example:dark">dark</option>
+              <option value="example:brand">brand</option>
+              <option value="example:full">full</option>
+            </optgroup>
+          </select>
+
           <h2>Embed target</h2>
           <div className="hc-config-field">
             <label htmlFor="hc-base-url">Widget page URL</label>
@@ -73,44 +194,216 @@ export function WidgetConfigView(): JSX.Element {
             />
           </div>
 
-          <h2>Tenant</h2>
+          <h2>Tenant (embed-safe)</h2>
           <div className="hc-config-field">
             <label htmlFor="hc-tenant">tenantId</label>
             <input
               id="hc-tenant"
               type="text"
-              value={cfg.tenantId ?? ''}
-              onChange={(e) => patch({ tenantId: e.target.value.trim() || undefined })}
+              value={cfg.backend?.tenantId ?? ''}
+              onChange={(e) => patch({ backend: { tenantId: e.target.value.trim() || undefined } })}
               placeholder="UUID"
             />
           </div>
           <label className="hc-config-check">
             <input
               type="checkbox"
-              checked={cfg.lockTenant}
-              onChange={(e) => patch({ lockTenant: e.target.checked })}
+              checked={cfg.backend?.lockTenant ?? false}
+              onChange={(e) => patch({ backend: { lockTenant: e.target.checked } })}
             />
             lockTenant
           </label>
           <label className="hc-config-check">
             <input
               type="checkbox"
-              checked={cfg.hideTenantField}
-              onChange={(e) => patch({ hideTenantField: e.target.checked })}
+              checked={cfg.backend?.hideTenantField ?? false}
+              onChange={(e) => patch({ backend: { hideTenantField: e.target.checked } })}
             />
             hideTenantField
           </label>
 
-          <h2>Panel & launcher</h2>
+          <h2>Colors</h2>
+          <p className="hc-config-subhead">Palette</p>
+          <ColorHexField
+            label="primary"
+            value={colors.primary}
+            onChange={(v) => patch({ colors: { primary: v } })}
+          />
+          <ColorHexField
+            label="secondary"
+            value={colors.secondary}
+            onChange={(v) => patch({ colors: { secondary: v } })}
+          />
+          <ColorHexField label="accent" value={colors.accent} onChange={(v) => patch({ colors: { accent: v } })} />
+          <ColorHexField
+            label="background"
+            value={colors.background}
+            onChange={(v) => patch({ colors: { background: v } })}
+          />
+          <ColorHexField label="surface" value={colors.surface} onChange={(v) => patch({ colors: { surface: v } })} />
+          <ColorHexField label="border" value={colors.border} onChange={(v) => patch({ colors: { border: v } })} />
+          <p className="hc-config-subhead">Text</p>
+          <ColorHexField
+            label="text.primary"
+            value={text.primary}
+            onChange={(v) => patch({ colors: { text: { primary: v } } })}
+          />
+          <ColorHexField
+            label="text.secondary"
+            value={text.secondary}
+            onChange={(v) => patch({ colors: { text: { secondary: v } } })}
+          />
+          <ColorHexField
+            label="text.tertiary"
+            value={text.tertiary}
+            onChange={(v) => patch({ colors: { text: { tertiary: v } } })}
+          />
+          <ColorHexField
+            label="text.inverse"
+            value={text.inverse}
+            onChange={(v) => patch({ colors: { text: { inverse: v } } })}
+          />
+          <p className="hc-config-subhead">Status</p>
+          <ColorHexField
+            label="status.success"
+            value={status.success}
+            onChange={(v) => patch({ colors: { status: { success: v } } })}
+          />
+          <ColorHexField
+            label="status.error"
+            value={status.error}
+            onChange={(v) => patch({ colors: { status: { error: v } } })}
+          />
+          <ColorHexField
+            label="status.warning"
+            value={status.warning}
+            onChange={(v) => patch({ colors: { status: { warning: v } } })}
+          />
+          <ColorHexField
+            label="status.info"
+            value={status.info}
+            onChange={(v) => patch({ colors: { status: { info: v } } })}
+          />
+
+          <h2>Typography</h2>
+          <div className="hc-config-field">
+            <label htmlFor="hc-ff">fontFamily</label>
+            <input
+              id="hc-ff"
+              type="text"
+              value={typo.fontFamily}
+              onChange={(e) => patch({ typography: { fontFamily: e.target.value } })}
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-fsb">fontSize.base (px)</label>
+            <input
+              id="hc-fsb"
+              type="number"
+              min={10}
+              max={24}
+              value={fs.base}
+              onChange={(e) =>
+                patch({ typography: { fontSize: { base: Number(e.target.value) || fs.base } } })
+              }
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-lh">lineHeight</label>
+            <input
+              id="hc-lh"
+              type="number"
+              step={0.05}
+              min={1}
+              max={2}
+              value={typo.lineHeight}
+              onChange={(e) => patch({ typography: { lineHeight: Number(e.target.value) || typo.lineHeight } })}
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-ls">letterSpacing</label>
+            <input
+              id="hc-ls"
+              type="number"
+              step={0.1}
+              value={typo.letterSpacing}
+              onChange={(e) => patch({ typography: { letterSpacing: Number(e.target.value) || 0 } })}
+            />
+          </div>
+
+          <h2>UI &amp; branding</h2>
+          <div className="hc-config-field">
+            <label htmlFor="hc-title">panelTitle</label>
+            <input
+              id="hc-title"
+              type="text"
+              value={cfg.uiElements?.panelTitle ?? ''}
+              onChange={(e) => patch({ uiElements: { panelTitle: e.target.value.trim() || undefined } })}
+              placeholder="Optional"
+            />
+          </div>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.uiElements?.showHeader ?? true}
+              onChange={(e) => patch({ uiElements: { showHeader: e.target.checked } })}
+            />
+            showHeader
+          </label>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.uiElements?.showFooter ?? true}
+              onChange={(e) => patch({ uiElements: { showFooter: e.target.checked } })}
+            />
+            showFooter
+          </label>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.uiElements?.showBranding ?? false}
+              onChange={(e) => patch({ uiElements: { showBranding: e.target.checked } })}
+            />
+            showBranding
+          </label>
+          <div className="hc-config-field">
+            <label htmlFor="hc-brand-txt">brandingText</label>
+            <input
+              id="hc-brand-txt"
+              type="text"
+              value={cfg.uiElements?.brandingText ?? ''}
+              onChange={(e) => patch({ uiElements: { brandingText: e.target.value.trim() || undefined } })}
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-hdr-icon">headerIconUrl</label>
+            <input
+              id="hc-hdr-icon"
+              type="url"
+              value={cfg.uiElements?.headerIconUrl ?? ''}
+              onChange={(e) => patch({ uiElements: { headerIconUrl: e.target.value.trim() || undefined } })}
+              placeholder="https://…"
+            />
+          </div>
+
+          <h2>Panel &amp; launcher</h2>
           <div className="hc-config-field">
             <label htmlFor="hc-pos">position</label>
             <select
               id="hc-pos"
-              value={cfg.position}
-              onChange={(e) => patch({ position: e.target.value as 'left' | 'right' })}
+              value={cfg.launcher?.position ?? 'right'}
+              onChange={(e) =>
+                patch({
+                  launcher: {
+                    position: e.target.value as NonNullable<WidgetInitConfig['launcher']>['position']
+                  }
+                })
+              }
             >
               <option value="right">right</option>
               <option value="left">left</option>
+              <option value="bottom-right">bottom-right</option>
+              <option value="bottom-left">bottom-left</option>
             </select>
           </div>
           <div className="hc-config-field">
@@ -120,8 +413,8 @@ export function WidgetConfigView(): JSX.Element {
               type="number"
               min={280}
               max={720}
-              value={cfg.panelWidth}
-              onChange={(e) => patch({ panelWidth: Number(e.target.value) || defaultWidgetInitConfig.panelWidth })}
+              value={cfg.spacing?.panelWidth ?? ds.panelWidth}
+              onChange={(e) => patch({ spacing: { panelWidth: Number(e.target.value) || ds.panelWidth } })}
             />
           </div>
           <div className="hc-config-field">
@@ -131,18 +424,45 @@ export function WidgetConfigView(): JSX.Element {
               type="number"
               min={400}
               max={900}
-              value={cfg.panelHeight}
-              onChange={(e) => patch({ panelHeight: Number(e.target.value) || defaultWidgetInitConfig.panelHeight })}
+              value={cfg.spacing?.panelHeight ?? ds.panelHeight}
+              onChange={(e) => patch({ spacing: { panelHeight: Number(e.target.value) || ds.panelHeight } })}
             />
           </div>
           <div className="hc-config-field">
-            <label htmlFor="hc-title">panelTitle</label>
+            <label htmlFor="hc-pmw">panelMaxWidth (CSS)</label>
             <input
-              id="hc-title"
+              id="hc-pmw"
               type="text"
-              value={cfg.panelTitle ?? ''}
-              onChange={(e) => patch({ panelTitle: e.target.value.trim() || undefined })}
-              placeholder="Optional"
+              value={cfg.spacing?.panelMaxWidth ?? ''}
+              onChange={(e) => patch({ spacing: { panelMaxWidth: e.target.value.trim() || undefined } })}
+              placeholder="e.g. min(100vw - 32px, 96vw)"
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-pmh">panelMaxHeight (CSS)</label>
+            <input
+              id="hc-pmh"
+              type="text"
+              value={cfg.spacing?.panelMaxHeight ?? ''}
+              onChange={(e) => patch({ spacing: { panelMaxHeight: e.target.value.trim() || undefined } })}
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-pbr">panelBorderRadius</label>
+            <input
+              id="hc-pbr"
+              type="text"
+              value={cfg.spacing?.panelBorderRadius ?? ds.panelBorderRadius}
+              onChange={(e) => patch({ spacing: { panelBorderRadius: e.target.value } })}
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-pbs">panelBoxShadow</label>
+            <input
+              id="hc-pbs"
+              type="text"
+              value={cfg.spacing?.panelBoxShadow ?? ds.panelBoxShadow}
+              onChange={(e) => patch({ spacing: { panelBoxShadow: e.target.value } })}
             />
           </div>
           <div className="hc-config-field">
@@ -151,8 +471,8 @@ export function WidgetConfigView(): JSX.Element {
               id="hc-ob"
               type="number"
               min={0}
-              value={cfg.offsetBottom}
-              onChange={(e) => patch({ offsetBottom: Number(e.target.value) || 0 })}
+              value={cfg.spacing?.offsetBottom ?? ds.offsetBottom}
+              onChange={(e) => patch({ spacing: { offsetBottom: Number(e.target.value) || 0 } })}
             />
           </div>
           <div className="hc-config-field">
@@ -161,8 +481,8 @@ export function WidgetConfigView(): JSX.Element {
               id="hc-os"
               type="number"
               min={0}
-              value={cfg.offsetSide}
-              onChange={(e) => patch({ offsetSide: Number(e.target.value) || 0 })}
+              value={cfg.spacing?.offsetSide ?? ds.offsetSide}
+              onChange={(e) => patch({ spacing: { offsetSide: Number(e.target.value) || 0 } })}
             />
           </div>
           <div className="hc-config-field">
@@ -172,8 +492,11 @@ export function WidgetConfigView(): JSX.Element {
               type="number"
               min={40}
               max={80}
-              value={cfg.launcherSize}
-              onChange={(e) => patch({ launcherSize: Number(e.target.value) || defaultWidgetInitConfig.launcherSize })}
+              value={cfg.spacing?.launcherSize ?? ds.launcherSize}
+              onChange={(e) => {
+                const n = Number(e.target.value) || ds.launcherSize;
+                patch({ spacing: { launcherSize: n }, launcher: { size: n } });
+              }}
             />
           </div>
           <div className="hc-config-field">
@@ -181,8 +504,8 @@ export function WidgetConfigView(): JSX.Element {
             <input
               id="hc-aria"
               type="text"
-              value={cfg.launcherAriaLabel}
-              onChange={(e) => patch({ launcherAriaLabel: e.target.value })}
+              value={cfg.launcher?.ariaLabel ?? dl.ariaLabel}
+              onChange={(e) => patch({ launcher: { ariaLabel: e.target.value } })}
             />
           </div>
           <div className="hc-config-field">
@@ -190,28 +513,101 @@ export function WidgetConfigView(): JSX.Element {
             <input
               id="hc-icon"
               type="url"
-              value={cfg.launcherIconUrl ?? ''}
-              onChange={(e) => patch({ launcherIconUrl: e.target.value.trim() || undefined })}
+              value={cfg.launcher?.iconUrl ?? ''}
+              onChange={(e) => patch({ launcher: { iconUrl: e.target.value.trim() || undefined } })}
               placeholder="https://…"
             />
           </div>
+          <p className="hc-config-subhead">Launcher badge</p>
           <label className="hc-config-check">
             <input
               type="checkbox"
-              checked={cfg.defaultOpen}
-              onChange={(e) => patch({ defaultOpen: e.target.checked })}
+              checked={cfg.launcher?.badge?.enabled ?? false}
+              onChange={(e) => patchLauncherBadge({ enabled: e.target.checked })}
+            />
+            badge.enabled
+          </label>
+          <ColorHexField
+            label="badge.backgroundColor"
+            value={cfg.launcher?.badge?.backgroundColor ?? '#ef4444'}
+            onChange={(v) => patchLauncherBadge({ backgroundColor: v })}
+          />
+          <ColorHexField
+            label="badge.textColor"
+            value={cfg.launcher?.badge?.textColor ?? '#ffffff'}
+            onChange={(v) => patchLauncherBadge({ textColor: v })}
+          />
+          <div className="hc-config-field">
+            <label htmlFor="hc-badge-count">badge.count</label>
+            <input
+              id="hc-badge-count"
+              type="number"
+              min={0}
+              value={cfg.launcher?.badge?.count ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                patchLauncherBadge({
+                  count: raw === '' ? undefined : Math.max(0, Number(raw) || 0)
+                });
+              }}
+            />
+          </div>
+
+          <h2>Interactions</h2>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.interactions?.defaultOpen ?? false}
+              onChange={(e) => patch({ interactions: { defaultOpen: e.target.checked } })}
             />
             defaultOpen
           </label>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.interactions?.closeOnEscape ?? true}
+              onChange={(e) => patch({ interactions: { closeOnEscape: e.target.checked } })}
+            />
+            closeOnEscape
+          </label>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.interactions?.closeOnClickOutside ?? true}
+              onChange={(e) => patch({ interactions: { closeOnClickOutside: e.target.checked } })}
+            />
+            closeOnClickOutside
+          </label>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.interactions?.animationEnabled ?? true}
+              onChange={(e) => patch({ interactions: { animationEnabled: e.target.checked } })}
+            />
+            animationEnabled
+          </label>
+          <div className="hc-config-field">
+            <label htmlFor="hc-anim-dur">animationDuration (ms)</label>
+            <input
+              id="hc-anim-dur"
+              type="number"
+              min={0}
+              max={2000}
+              value={cfg.interactions?.animationDuration ?? 300}
+              onChange={(e) =>
+                patch({ interactions: { animationDuration: Number(e.target.value) || 0 } })
+              }
+            />
+          </div>
 
-          <h2>API (optional)</h2>
+          <h2>Backend (profile — not in embed URL)</h2>
           <div className="hc-config-field">
             <label htmlFor="hc-api">apiUrl</label>
             <input
               id="hc-api"
               type="url"
-              value={cfg.apiUrl ?? ''}
-              onChange={(e) => patch({ apiUrl: e.target.value.trim() || undefined })}
+              value={cfg.backend?.apiUrl ?? ''}
+              onChange={(e) => patch({ backend: { apiUrl: e.target.value.trim() || undefined } })}
               placeholder="https://host/api"
             />
           </div>
@@ -220,13 +616,68 @@ export function WidgetConfigView(): JSX.Element {
             <input
               id="hc-sock"
               type="url"
-              value={cfg.socketUrl ?? ''}
-              onChange={(e) => patch({ socketUrl: e.target.value.trim() || undefined })}
-              placeholder="https://host"
+              value={cfg.backend?.socketUrl ?? ''}
+              onChange={(e) => patch({ backend: { socketUrl: e.target.value.trim() || undefined } })}
+              placeholder="wss://host"
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-to">apiTimeout (ms)</label>
+            <input
+              id="hc-to"
+              type="number"
+              min={1000}
+              value={cfg.backend?.apiTimeout ?? 30000}
+              onChange={(e) => patch({ backend: { apiTimeout: Number(e.target.value) || 30000 } })}
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-retry">retryAttempts</label>
+            <input
+              id="hc-retry"
+              type="number"
+              min={0}
+              max={10}
+              value={cfg.backend?.retryAttempts ?? 3}
+              onChange={(e) => patch({ backend: { retryAttempts: Number(e.target.value) || 0 } })}
             />
           </div>
 
-          <h2>Advanced</h2>
+          <h2>Accessibility &amp; global</h2>
+          <div className="hc-config-field">
+            <label htmlFor="hc-a11y-label">a11y.ariaLabel</label>
+            <input
+              id="hc-a11y-label"
+              type="text"
+              value={cfg.a11y?.ariaLabel ?? defaultWidgetInitConfig.a11y!.ariaLabel}
+              onChange={(e) => patch({ a11y: { ariaLabel: e.target.value } })}
+            />
+          </div>
+          <div className="hc-config-field">
+            <label htmlFor="hc-a11y-desc">a11y.ariaDescribedBy</label>
+            <input
+              id="hc-a11y-desc"
+              type="text"
+              value={cfg.a11y?.ariaDescribedBy ?? ''}
+              onChange={(e) => patch({ a11y: { ariaDescribedBy: e.target.value.trim() || undefined } })}
+            />
+          </div>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.a11y?.reduceMotion ?? false}
+              onChange={(e) => patch({ a11y: { reduceMotion: e.target.checked } })}
+            />
+            reduceMotion
+          </label>
+          <label className="hc-config-check">
+            <input
+              type="checkbox"
+              checked={cfg.a11y?.highContrast ?? false}
+              onChange={(e) => patch({ a11y: { highContrast: e.target.checked } })}
+            />
+            highContrast
+          </label>
           <div className="hc-config-field">
             <label htmlFor="hc-z">zIndex</label>
             <input
@@ -239,18 +690,10 @@ export function WidgetConfigView(): JSX.Element {
           <label className="hc-config-check">
             <input
               type="checkbox"
-              checked={cfg.closeOnEscape}
-              onChange={(e) => patch({ closeOnEscape: e.target.checked })}
+              checked={cfg.debug ?? false}
+              onChange={(e) => patch({ debug: e.target.checked })}
             />
-            closeOnEscape
-          </label>
-          <label className="hc-config-check">
-            <input
-              type="checkbox"
-              checked={cfg.closeOnClickOutside}
-              onChange={(e) => patch({ closeOnClickOutside: e.target.checked })}
-            />
-            closeOnClickOutside
+            debug
           </label>
 
           <div className="hc-config-actions">
@@ -263,8 +706,12 @@ export function WidgetConfigView(): JSX.Element {
             <button
               type="button"
               className="hc-config-btn-secondary"
-              onClick={() => setCfg({ ...defaultWidgetInitConfig })}
+              onClick={copyFullJson}
+              disabled={Boolean(error)}
             >
+              {copiedJson ? 'JSON copied!' : 'Copy full JSON'}
+            </button>
+            <button type="button" className="hc-config-btn-secondary" onClick={() => setCfg(mergeConfig({}))}>
               Reset to defaults
             </button>
           </div>
@@ -273,6 +720,11 @@ export function WidgetConfigView(): JSX.Element {
 
         <div className="hc-config-panel">
           <h2>Generated URL</h2>
+          <p className="hc-config-note">
+            In <strong>development</strong>, the preview URL includes <code>__hc_cfg_preview=1</code> and color params so
+            the iframe matches your palette. Run both <code>config.html</code> and <code>widget.html</code> from{' '}
+            <code>npm run dev</code>. Production embeds do not apply colors from the URL.
+          </p>
           <div className="hc-config-field">
             <label htmlFor="hc-src-out">iframe src (read-only)</label>
             <textarea id="hc-src-out" readOnly value={iframeSrc || '(fix errors above)'} rows={5} />
@@ -280,21 +732,18 @@ export function WidgetConfigView(): JSX.Element {
           <h2>Live preview</h2>
           <div className="hc-config-preview-frame-wrap">
             {iframeSrc ? (
-              <iframe
-                key={previewNonce}
-                title="Widget preview"
-                src={iframeSrc}
-                allow="microphone"
-              />
+              <iframe key={previewNonce} title="Widget preview" src={iframeSrc} allow="microphone" />
             ) : (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>Fix validation errors to preview.</div>
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
+                Fix validation errors to preview.
+              </div>
             )}
           </div>
         </div>
       </div>
 
       <p className="hc-config-footnote">
-        Production embed guide: see <code>docs/WIDGET_EMBED.md</code>. Loader script:{' '}
+        Open this page at <code>/config.html</code>. Production embed guide: <code>docs/WIDGET_EMBED.md</code>. Loader:{' '}
         <code>public/healthchat-widget-loader.js</code>.
       </p>
     </div>

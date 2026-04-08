@@ -1,10 +1,24 @@
 let runtimeApiUrl: string | undefined;
 let runtimeSocketUrl: string | undefined;
+let runtimeApiTimeoutMs: number | undefined;
 
-/** Call before first API/socket use when embedding (e.g. from widget init config). */
-export function applyRuntimeApiOverrides(overrides: { apiUrl?: string; socketUrl?: string }): void {
+/** Call before first API/socket use when embedding (e.g. from `getWidgetInitConfig()` in `main-widget.tsx`). */
+export function applyRuntimeApiOverrides(overrides: {
+  apiUrl?: string;
+  socketUrl?: string;
+  /** From `WidgetInitConfig.backend.apiTimeout`; applied to axios request `timeout`. */
+  apiTimeout?: number;
+}): void {
   runtimeApiUrl = overrides.apiUrl?.replace(/\/$/, '') || undefined;
   runtimeSocketUrl = overrides.socketUrl?.replace(/\/$/, '') || undefined;
+  if (overrides.apiTimeout !== undefined && Number.isFinite(overrides.apiTimeout) && overrides.apiTimeout > 0) {
+    runtimeApiTimeoutMs = overrides.apiTimeout;
+  }
+}
+
+/** Resolved API request timeout (ms) when the widget set `backend.apiTimeout`; otherwise unset. */
+export function getResolvedApiTimeoutMs(): number | undefined {
+  return runtimeApiTimeoutMs;
 }
 
 function getApiConfig(): { origin: string; apiBase: string } {

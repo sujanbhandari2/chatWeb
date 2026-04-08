@@ -1,10 +1,13 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { WidgetInitConfig } from '../../schemas/widget.schemas';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { defaultWidgetInitConfig, type WidgetInitConfig } from '../../schemas/widget.schemas';
+import { applyWidgetCssVariables } from '../../utils/widget-css-variables.utils';
 
 type ChatWidgetShellProps = {
   config: WidgetInitConfig;
   children: ReactNode;
+  /** Shown in the panel header when `config.uiElements.panelTitle` is not set (e.g. "Chats"). */
+  panelHeaderCenterText?: string;
 };
 
 function getFocusableElements(root: HTMLElement): HTMLElement[] {
@@ -15,11 +18,24 @@ function getFocusableElements(root: HTMLElement): HTMLElement[] {
   );
 }
 
-export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX.Element {
+function isHorizontalLeft(position: string): boolean {
+  return position === 'left' || position === 'bottom-left';
+}
+
+export function ChatWidgetShell({ config, children, panelHeaderCenterText }: ChatWidgetShellProps): JSX.Element {
   const panelId = useId().replace(/:/g, '');
+  const rootRef = useRef<HTMLDivElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(config.defaultOpen);
+
+  const interactions = config.interactions ?? defaultWidgetInitConfig.interactions!;
+  const spacing = config.spacing ?? defaultWidgetInitConfig.spacing!;
+  const launcher = config.launcher ?? defaultWidgetInitConfig.launcher!;
+  const typography = config.typography ?? defaultWidgetInitConfig.typography!;
+  const colors = config.colors ?? defaultWidgetInitConfig.colors!;
+  const uiElements = config.uiElements ?? defaultWidgetInitConfig.uiElements!;
+
+  const [open, setOpen] = useState(interactions.defaultOpen);
 
   const close = useCallback((): void => {
     setOpen(false);
@@ -29,6 +45,13 @@ export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX
   const toggle = useCallback((): void => {
     setOpen((o) => !o);
   }, []);
+
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (el) {
+      applyWidgetCssVariables(el, config);
+    }
+  }, [config]);
 
   useEffect(() => {
     if (!open) {
@@ -45,7 +68,7 @@ export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (config.closeOnEscape && e.key === 'Escape') {
+      if (interactions.closeOnEscape && e.key === 'Escape') {
         e.preventDefault();
         close();
         return;
@@ -68,10 +91,10 @@ export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX
 
     panel.addEventListener('keydown', onKeyDown);
     return () => panel.removeEventListener('keydown', onKeyDown);
-  }, [open, config.closeOnEscape, close]);
+  }, [open, interactions.closeOnEscape, close]);
 
   useEffect(() => {
-    if (!open || !config.closeOnClickOutside) {
+    if (!open || !interactions.closeOnClickOutside) {
       return undefined;
     }
     const onMouseDown = (e: MouseEvent): void => {
@@ -83,23 +106,33 @@ export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX
     };
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [open, config.closeOnClickOutside, close]);
+  }, [open, interactions.closeOnClickOutside, close]);
 
-  const isRight = config.position === 'right';
+  const position = launcher.position;
+  const isRight = !isHorizontalLeft(position);
+  const launcherSize = launcher.size;
+  const textInverse = colors.text?.inverse ?? '#ffffff';
+
   const launcherStyle: CSSProperties = {
     position: 'fixed',
-    bottom: config.offsetBottom,
-    [isRight ? 'right' : 'left']: config.offsetSide,
-    width: config.launcherSize,
-    height: config.launcherSize,
+    bottom: spacing.offsetBottom,
+    [isRight ? 'right' : 'left']: spacing.offsetSide,
+    width: launcherSize,
+    height: launcherSize,
     zIndex: config.zIndex,
     borderRadius: '999px',
     border: 'none',
     padding: 0,
+    fontFamily: typography.fontFamily,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    lineHeight: typography.lineHeight,
+    letterSpacing: typography.letterSpacing,
+    textAlign: 'center',
+    color: textInverse,
+    backgroundColor: 'var(--widget-primary, #2563eb)',
     cursor: 'pointer',
     boxShadow: '0 4px 14px rgba(15, 23, 42, 0.2)',
-    background: '#0084ff',
-    color: '#fff',
     display: 'grid',
     placeItems: 'center',
     overflow: 'hidden'
@@ -107,24 +140,27 @@ export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX
 
   const panelStyle: CSSProperties = {
     position: 'fixed',
-    bottom: config.offsetBottom + config.launcherSize + 12,
-    [isRight ? 'right' : 'left']: config.offsetSide,
-    width: config.panelWidth,
-    height: config.panelHeight,
-    maxWidth: config.panelMaxWidth ?? 'min(100vw - 32px, 96vw)',
-    maxHeight: config.panelMaxHeight ?? 'min(100vh - 32px, 92vh)',
+    bottom: spacing.offsetBottom + launcherSize + 12,
+    [isRight ? 'right' : 'left']: spacing.offsetSide,
+    width: spacing.panelWidth,
+    height: spacing.panelHeight,
+    maxWidth: spacing.panelMaxWidth ?? 'min(100vw - 32px, 96vw)',
+    maxHeight: spacing.panelMaxHeight ?? 'min(100vh - 32px, 92vh)',
     zIndex: config.zIndex,
-    borderRadius: config.panelBorderRadius,
-    boxShadow: config.panelBoxShadow,
-    background: '#f0f2f5',
+    borderRadius: spacing.panelBorderRadius,
+    boxShadow: spacing.panelBoxShadow,
+    background: 'var(--widget-surface, #f8fafc)',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
     outline: 'none'
   };
 
+  const panelTitle = uiElements.panelTitle;
+  const ariaLabel = launcher.ariaLabel;
+
   return (
-    <div className="chat-widget-root">
+    <div ref={rootRef} className="chat-widget-root">
       <button
         ref={launcherRef}
         type="button"
@@ -132,11 +168,11 @@ export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX
         style={launcherStyle}
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={config.launcherAriaLabel}
+        aria-label={ariaLabel}
         onClick={toggle}
       >
-        {config.launcherIconUrl ? (
-          <img src={config.launcherIconUrl} alt="" width={28} height={28} style={{ objectFit: 'cover' }} />
+        {launcher.iconUrl ? (
+          <img src={launcher.iconUrl} alt="" width={28} height={28} style={{ objectFit: 'cover' }} />
         ) : (
           <span style={{ fontSize: '1.35rem', lineHeight: 1 }} aria-hidden>
             💬
@@ -152,12 +188,14 @@ export function ChatWidgetShell({ config, children }: ChatWidgetShellProps): JSX
           style={panelStyle}
           role="dialog"
           aria-modal="true"
-          aria-label={config.panelTitle ?? config.launcherAriaLabel}
+          aria-label={panelTitle ?? panelHeaderCenterText ?? ariaLabel}
           tabIndex={-1}
         >
           <div className="chat-widget-panel-header">
-            {config.panelTitle ? (
-              <span className="chat-widget-panel-title">{config.panelTitle}</span>
+            {panelTitle ? (
+              <span className="chat-widget-panel-title">{panelTitle}</span>
+            ) : panelHeaderCenterText ? (
+              <span className="chat-widget-panel-title chat-widget-panel-title--centered">{panelHeaderCenterText}</span>
             ) : (
               <span className="chat-widget-panel-title chat-widget-panel-title--placeholder" aria-hidden />
             )}

@@ -5,7 +5,7 @@
  * <script
  *   src="https://your-cdn/healthchat-widget-loader.js"
  *   data-widget-src="https://your-cdn/widget.html"
- *   data-config='{"tenantId":"…","lockTenant":true,"position":"right"}'
+ *   data-config='{"tenantId":"…","lockTenant":true,"position":"right","panelWidth":400}'
  *   async
  * ></script>
  *
@@ -59,12 +59,8 @@
       'panelMaxHeight',
       'panelBorderRadius',
       'panelBoxShadow',
-      'zIndex',
       'closeOnEscape',
-      'closeOnClickOutside',
-      'apiUrl',
-      'socketUrl',
-      'panelTitle'
+      'closeOnClickOutside'
     ];
     var u = new URL(base, window.location.href);
     var params = new URLSearchParams(u.search);
@@ -130,7 +126,7 @@
     var config = parseConfig(s);
     var iframe = document.createElement('iframe');
     iframe.src = appendQuery(base, config);
-    iframe.title = config.launcherAriaLabel || config.panelTitle || 'HealthChat';
+    iframe.title = config.launcherAriaLabel || 'HealthChat';
     iframe.setAttribute('allow', 'microphone');
     iframe.style.cssText = iframeBox(config);
     document.body.appendChild(iframe);

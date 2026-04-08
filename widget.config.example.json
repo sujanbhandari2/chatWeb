@@ -1,25 +1,48 @@
 {
-  "$schemaNote": "Copy fields into window.__HEALTHCHAT_WIDGET_CONFIG__ or into the loader data-config JSON. All keys are optional except tenantId is required for production embeds.",
-  "tenantId": "00000000-0000-4000-8000-000000000000",
-  "lockTenant": true,
-  "hideTenantField": false,
-  "position": "right",
-  "offsetBottom": 24,
-  "offsetSide": 24,
-  "launcherSize": 56,
-  "launcherIconUrl": "",
-  "launcherAriaLabel": "Open chat",
-  "defaultOpen": false,
-  "panelWidth": 400,
-  "panelHeight": 560,
-  "panelMaxWidth": "min(100vw - 32px, 96vw)",
-  "panelMaxHeight": "min(100vh - 32px, 92vh)",
-  "panelBorderRadius": "16px",
-  "panelBoxShadow": "0 12px 40px rgba(15, 23, 42, 0.18)",
-  "zIndex": 99999,
-  "closeOnEscape": true,
-  "closeOnClickOutside": true,
-  "apiUrl": "",
-  "socketUrl": "",
-  "panelTitle": ""
+  "$schemaNote": "Use nested keys (below). Legacy flat keys (tenantId, position, panelWidth at root) are still accepted via URL params and window.__HEALTHCHAT_WIDGET_CONFIG__ — see src/utils/widget-runtime.utils.ts legacyFlatToPartialConfig.",
+  "backend": {
+    "tenantId": "00000000-0000-4000-8000-000000000000",
+    "lockTenant": true,
+    "hideTenantField": false,
+    "apiUrl": "",
+    "socketUrl": ""
+  },
+  "launcher": {
+    "position": "right",
+    "size": 56,
+    "ariaLabel": "Open chat",
+    "iconUrl": ""
+  },
+  "spacing": {
+    "offsetBottom": 24,
+    "offsetSide": 24,
+    "launcherSize": 56,
+    "panelWidth": 400,
+    "panelHeight": 560,
+    "panelMaxWidth": "min(100vw - 32px, 96vw)",
+    "panelMaxHeight": "min(100vh - 32px, 92vh)",
+    "panelBorderRadius": "16px",
+    "panelBoxShadow": "0 12px 40px rgba(15, 23, 42, 0.18)"
+  },
+  "interactions": {
+    "defaultOpen": false,
+    "closeOnEscape": true,
+    "closeOnClickOutside": true
+  },
+  "uiElements": {
+    "panelTitle": ""
+  },
+  "typography": {
+    "fontFamily": "Inter, sans-serif",
+    "fontSize": { "base": 16 },
+    "fontWeight": { "normal": 400 },
+    "lineHeight": 1.5,
+    "letterSpacing": 0
+  },
+  "colors": {
+    "primary": "#2563eb",
+    "secondary": "#64748b",
+    "text": { "primary": "#000000" }
+  },
+  "zIndex": 99999
 }

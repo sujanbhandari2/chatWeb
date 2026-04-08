@@ -1,0 +1,391 @@
+/**
+ * CSS Variables and utilities for widget theming
+ * Import this in your widget CSS file
+ */
+
+/* ========== Color Variables ========== */
+:root {
+  /* Primary Colors */
+  --widget-primary: #2563eb;
+  --widget-secondary: #64748b;
+  --widget-accent: #f59e0b;
+
+  /* Background & Surface */
+  --widget-background: #ffffff;
+  --widget-surface: #f8fafc;
+  --widget-border: #e2e8f0;
+
+  /* Text Colors */
+  --widget-text-primary: #1e293b;
+  --widget-text-secondary: #64748b;
+  --widget-text-tertiary: #94a3b8;
+  --widget-text-inverse: #ffffff;
+  --widget-on-primary: #ffffff;
+
+  /* Status Colors */
+  --widget-success: #10b981;
+  --widget-error: #ef4444;
+  --widget-warning: #f59e0b;
+  --widget-info: #0ea5e9;
+
+  /* Typography */
+  --widget-font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  --widget-font-size-xs: 12px;
+  --widget-font-size-sm: 14px;
+  --widget-font-size-base: 16px;
+  --widget-font-size-lg: 18px;
+  --widget-font-size-xl: 20px;
+  --widget-font-size-2xl: 24px;
+
+  --widget-font-weight-light: 300;
+  --widget-font-weight-normal: 400;
+  --widget-font-weight-medium: 500;
+  --widget-font-weight-semibold: 600;
+  --widget-font-weight-bold: 700;
+
+  --widget-line-height: 1.5;
+  --widget-letter-spacing: 0;
+
+  /* Spacing & Layout */
+  --widget-panel-width: 380px;
+  --widget-panel-height: 560px;
+  --widget-launcher-size: 56px;
+  --widget-panel-radius: 12px;
+  --widget-panel-shadow: 0 12px 40px rgba(15, 23, 42, 0.15);
+
+  /* Z-index */
+  --widget-z-index: 99999;
+}
+
+/* ========== Dark Mode ========== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --widget-primary: #3b82f6;
+    --widget-secondary: #9ca3af;
+    --widget-accent: #fbbf24;
+
+    --widget-background: #1f2937;
+    --widget-surface: #111827;
+    --widget-border: #374151;
+
+    --widget-text-primary: #f3f4f6;
+    --widget-text-secondary: #d1d5db;
+    --widget-text-tertiary: #9ca3af;
+    --widget-text-inverse: #1f2937;
+    --widget-on-primary: #ffffff;
+
+    --widget-panel-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* ========== Base Styles ========== */
+.widget-container {
+  font-family: var(--widget-font-family);
+  color: var(--widget-text-primary);
+  background-color: var(--widget-background);
+  font-size: var(--widget-font-size-base);
+  line-height: var(--widget-line-height);
+  letter-spacing: var(--widget-letter-spacing);
+}
+
+/* ========== Component Examples ========== */
+
+/* Chat Panel */
+.chat-panel {
+  width: var(--widget-panel-width);
+  height: var(--widget-panel-height);
+  background-color: var(--widget-background);
+  border: 1px solid var(--widget-border);
+  border-radius: var(--widget-panel-radius);
+  box-shadow: var(--widget-panel-shadow);
+  z-index: var(--widget-z-index);
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * Demo layout only: scope under .chat-panel so real messenger UI (.chat-header in styles.css)
+ * keeps normal title colors (text-primary), not text-inverse leaking onto person/conversation names.
+ */
+.chat-panel .chat-header {
+  background: linear-gradient(135deg, var(--widget-primary), var(--widget-secondary));
+  color: var(--widget-text-inverse);
+  padding: 16px;
+  border-radius: var(--widget-panel-radius) var(--widget-panel-radius) 0 0;
+  font-weight: var(--widget-font-weight-semibold);
+  font-size: var(--widget-font-size-lg);
+}
+
+/* Chat Messages Area */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background-color: var(--widget-surface);
+}
+
+/* Message Bubble - User */
+.message-bubble.user {
+  background-color: var(--widget-primary);
+  color: var(--widget-text-inverse);
+  padding: 8px 12px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  max-width: 80%;
+  word-wrap: break-word;
+  margin-left: auto;
+  font-size: var(--widget-font-size-sm);
+}
+
+/* Message Bubble - Bot */
+.message-bubble.bot {
+  background-color: var(--widget-surface);
+  color: var(--widget-text-primary);
+  padding: 8px 12px;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  max-width: 80%;
+  word-wrap: break-word;
+  border: 1px solid var(--widget-border);
+  font-size: var(--widget-font-size-sm);
+}
+
+/* Input Area */
+.chat-input-area {
+  padding: 12px;
+  border-top: 1px solid var(--widget-border);
+  background-color: var(--widget-background);
+  border-radius: 0 0 var(--widget-panel-radius) var(--widget-panel-radius);
+}
+
+.chat-input {
+  width: 100%;
+  border: 1px solid var(--widget-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: var(--widget-font-family);
+  font-size: var(--widget-font-size-sm);
+  color: var(--widget-text-primary);
+  background-color: var(--widget-background);
+  transition: border-color 0.2s ease;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--widget-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Send Button */
+.send-button {
+  background-color: var(--widget-primary);
+  color: var(--widget-text-inverse);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: var(--widget-font-weight-semibold);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: var(--widget-font-size-sm);
+}
+
+.send-button:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+.send-button:active {
+  transform: translateY(0);
+}
+
+/* Launcher Button */
+.launcher-button {
+  width: var(--widget-launcher-size);
+  height: var(--widget-launcher-size);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--widget-primary), var(--widget-accent));
+  color: var(--widget-text-inverse);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  transition: all 0.3s ease;
+  z-index: var(--widget-z-index);
+  position: fixed;
+}
+
+.launcher-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+}
+
+.launcher-button:active {
+  transform: scale(0.95);
+}
+
+/* Launcher Badge */
+.launcher-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background-color: var(--widget-error);
+  color: var(--widget-text-inverse);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--widget-font-size-xs);
+  font-weight: var(--widget-font-weight-bold);
+  border: 2px solid var(--widget-background);
+}
+
+/* ========== Status Badges ========== */
+
+.badge-success {
+  background-color: var(--widget-success);
+  color: var(--widget-text-inverse);
+}
+
+.badge-error {
+  background-color: var(--widget-error);
+  color: var(--widget-text-inverse);
+}
+
+.badge-warning {
+  background-color: var(--widget-warning);
+  color: var(--widget-text-primary);
+}
+
+.badge-info {
+  background-color: var(--widget-info);
+  color: var(--widget-text-inverse);
+}
+
+/* ========== Accessibility ========== */
+
+@media (prefers-reduced-motion: reduce) {
+  .launcher-button,
+  .send-button,
+  .chat-input {
+    transition: none !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: more) {
+  .chat-panel {
+    border-width: 2px;
+  }
+
+  .message-bubble {
+    border-width: 2px;
+  }
+
+  .chat-input {
+    border-width: 2px;
+  }
+}
+
+/* ========== Responsive ========== */
+
+@media (max-width: 480px) {
+  .chat-panel {
+    width: 100vw;
+    height: 100vh;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  .message-bubble {
+    max-width: 90%;
+  }
+}
+
+/* ========== Animations ========== */
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+}
+
+.chat-panel.open {
+  animation: slideIn 0.3s ease-out;
+}
+
+.chat-panel.close {
+  animation: slideOut 0.3s ease-in;
+}
+
+/* ========== Utility Classes ========== */
+
+.text-primary {
+  color: var(--widget-text-primary);
+}
+
+.text-secondary {
+  color: var(--widget-text-secondary);
+}
+
+.text-tertiary {
+  color: var(--widget-text-tertiary);
+}
+
+.bg-primary {
+  background-color: var(--widget-primary);
+}
+
+.bg-secondary {
+  background-color: var(--widget-secondary);
+}
+
+.bg-surface {
+  background-color: var(--widget-surface);
+}
+
+.border-default {
+  border-color: var(--widget-border);
+}
+
+.font-semibold {
+  font-weight: var(--widget-font-weight-semibold);
+}
+
+.font-bold {
+  font-weight: var(--widget-font-weight-bold);
+}
+
+.text-sm {
+  font-size: var(--widget-font-size-sm);
+}
+
+.text-lg {
+  font-size: var(--widget-font-size-lg);
+}

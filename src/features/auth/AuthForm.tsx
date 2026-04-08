@@ -145,10 +145,12 @@ function LoginFields({
 
 export function AuthForm({ widgetMode = false, widgetConfig, widgetMissingTenant }: AuthFormProps): JSX.Element {
   const [mode, setMode] = useState<'register' | 'login'>('register');
-  const hideTenant = Boolean(widgetMode && widgetConfig?.hideTenantField);
-  const lockTenant = Boolean(widgetMode && (widgetConfig?.lockTenant || widgetConfig?.hideTenantField));
+  const hideTenant = Boolean(widgetMode && widgetConfig?.backend?.hideTenantField);
+  const lockTenant = Boolean(
+    widgetMode && (widgetConfig?.backend?.lockTenant || widgetConfig?.backend?.hideTenantField)
+  );
   const defaultTenantId =
-    widgetMode && widgetConfig?.tenantId?.trim() ? widgetConfig.tenantId.trim() : '';
+    widgetMode && widgetConfig?.backend?.tenantId?.trim() ? widgetConfig.backend.tenantId.trim() : '';
 
   return (
     <>
