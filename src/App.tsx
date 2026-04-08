@@ -15,7 +15,9 @@ import {
   removeConversationParticipant,
   serverOrigin,
   updateConversation,
-  uploadFile
+  uploadFile,
+  transcribeSpeech,
+  translateText
 } from './api/client';
 import { formatZodError, loginSchema, registerSchema } from './schemas/auth';
 import {
@@ -44,6 +46,34 @@ type DeliveryStatus = 'sent' | 'delivered' | 'seen';
 
 /** Shown on hover (desktop); touch users use the ⋮ menu copy of these. */
 const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+
+const TRANSLATE_TARGET_LANGS: Array<{ code: string; label: string }> = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'it', label: 'Italian' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'ko', label: 'Korean' }
+];
+
+const translateLangLabel = (code: string): string =>
+  TRANSLATE_TARGET_LANGS.find((lang) => lang.code === code)?.label ?? code.toUpperCase();
+
+type MessageSpeechUiState = {
+  transcript?: string;
+  translated?: string;
+  targetLang?: string;
+  loading?: 'transcribe' | 'translate';
+  error?: string;
+  /** Messenger-style: language row hidden until user taps “See translation” */
+  translateToolsOpen?: boolean;
+};
 
 const toAbsoluteMediaUrl = (url: string): string => {
   if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -293,6 +323,14 @@ export default function App() {
   const audioStreamRef = useRef<MediaStream | null>(null);
   const discardRecordingRef = useRef<boolean>(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState<number>(0);
+  const [messageSpeechUi, setMessageSpeechUi] = useState<Record<string, MessageSpeechUiState>>({});
+
+  const patchMessageSpeechUi = (messageId: string, patch: Partial<MessageSpeechUiState>): void => {
+    setMessageSpeechUi((previous) => ({
+      ...previous,
+      [messageId]: { ...previous[messageId], ...patch }
+    }));
+  };
 
   useEffect(() => {
     selectedConversationRef.current = selectedConversationId;
@@ -335,6 +373,7 @@ export default function App() {
 
   useEffect(() => {
     setMessageActionsMenuId(null);
+    setMessageSpeechUi({});
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -1627,6 +1666,62 @@ export default function App() {
     }
   };
 
+  const handleTranscribeVoiceMessage = async (message: Message): Promise<void> => {
+    if (!token) {
+      setError('Sign in required');
+      return;
+    }
+    const id = message.id;
+    patchMessageSpeechUi(id, { loading: 'transcribe', error: undefined });
+    try {
+      const url = toAbsoluteMediaUrl(message.content);
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
+      if (!res.ok) {
+        throw new Error('Could not load audio');
+      }
+      const blob = await res.blob();
+      const out = await transcribeSpeech(token, blob, { filename: 'message.webm' });
+      const text = out.data?.text ?? '';
+      patchMessageSpeechUi(id, { loading: undefined, transcript: text });
+    } catch (err) {
+      patchMessageSpeechUi(id, {
+        loading: undefined,
+        error: err instanceof Error ? err.message : 'Transcription failed'
+      });
+    }
+  };
+
+  const handleTranslateForMessage = async (
+    message: Message,
+    sourceText: string,
+    targetLanguage: string
+  ): Promise<void> => {
+    if (!token) {
+      setError('Sign in required');
+      return;
+    }
+    if (!sourceText.trim()) {
+      return;
+    }
+    const id = message.id;
+    patchMessageSpeechUi(id, { loading: 'translate', error: undefined });
+    try {
+      const out = await translateText(token, {
+        text: sourceText,
+        targetLanguage
+      });
+      const translated = out.data?.translatedText ?? '';
+      patchMessageSpeechUi(id, { loading: undefined, translated });
+    } catch (err) {
+      patchMessageSpeechUi(id, {
+        loading: undefined,
+        error: err instanceof Error ? err.message : 'Translation failed'
+      });
+    }
+  };
+
   const startRecording = async (): Promise<void> => {
     if (!token || !selectedConversationId || isRecording) {
       return;
@@ -2012,6 +2107,7 @@ export default function App() {
                   selectedConversation != null &&
                   (isGroupConversation(selectedConversation) || isGlobalConversation(selectedConversation));
                 const menuOpen = messageActionsMenuId === message.id;
+                const speechUi = messageSpeechUi[message.id];
 
                 return (
                   <div key={message.id} className={`message-row-outer ${isMine ? 'mine' : 'theirs'}`}>
@@ -2108,9 +2204,186 @@ export default function App() {
                           ) : getMessageType(message) === 'IMAGE' ? (
                             <img src={toAbsoluteMediaUrl(message.content)} alt="Uploaded" />
                           ) : getMessageType(message) === 'VOICE' ? (
-                            <audio controls src={toAbsoluteMediaUrl(message.content)} />
+                            <>
+                              <audio controls src={toAbsoluteMediaUrl(message.content)} />
+                              <div className="message-msgr-translation">
+                                {!speechUi?.transcript ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="message-msgr-link"
+                                      disabled={speechUi?.loading === 'transcribe'}
+                                      onClick={() => void handleTranscribeVoiceMessage(message)}
+                                    >
+                                      {speechUi?.loading === 'transcribe' ? 'Transcribing…' : 'Transcribe'}
+                                    </button>
+                                    {speechUi?.error && !speechUi?.transcript ? (
+                                      <p className="message-msgr-error" role="alert">
+                                        {speechUi.error}
+                                      </p>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="message-msgr-transcript">{speechUi.transcript}</p>
+                                    {speechUi.translated ? (
+                                      <>
+                                        <div className="message-msgr-divider" aria-hidden />
+                                        <p className="message-msgr-meta">
+                                          Translation · {translateLangLabel(speechUi.targetLang ?? 'en')}
+                                        </p>
+                                        <p className="message-msgr-translation-body" aria-live="polite">
+                                          {speechUi.translated}
+                                        </p>
+                                        <button
+                                          type="button"
+                                          className="message-msgr-link"
+                                          onClick={() =>
+                                            patchMessageSpeechUi(message.id, {
+                                              translated: undefined,
+                                              error: undefined,
+                                              translateToolsOpen: false
+                                            })
+                                          }
+                                        >
+                                          See original
+                                        </button>
+                                      </>
+                                    ) : speechUi.translateToolsOpen ? (
+                                      <div className="message-msgr-tools">
+                                        <label className="visually-hidden" htmlFor={`trg-voice-${message.id}`}>
+                                          Language
+                                        </label>
+                                        <select
+                                          id={`trg-voice-${message.id}`}
+                                          className="message-msgr-select"
+                                          value={speechUi.targetLang ?? 'en'}
+                                          onChange={(event) =>
+                                            patchMessageSpeechUi(message.id, { targetLang: event.target.value })
+                                          }
+                                        >
+                                          {TRANSLATE_TARGET_LANGS.map((lang) => (
+                                            <option key={lang.code} value={lang.code}>
+                                              {lang.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          type="button"
+                                          className="message-msgr-link"
+                                          disabled={speechUi.loading === 'translate'}
+                                          onClick={() =>
+                                            void handleTranslateForMessage(
+                                              message,
+                                              speechUi.transcript ?? '',
+                                              speechUi.targetLang ?? 'en'
+                                            )
+                                          }
+                                        >
+                                          {speechUi.loading === 'translate' ? 'Translating…' : 'See translation'}
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="message-msgr-link"
+                                        onClick={() =>
+                                          patchMessageSpeechUi(message.id, { translateToolsOpen: true })
+                                        }
+                                      >
+                                        See translation
+                                      </button>
+                                    )}
+                                    {speechUi.error && speechUi.transcript && !speechUi.translated ? (
+                                      <p className="message-msgr-error" role="alert">
+                                        {speechUi.error}
+                                      </p>
+                                    ) : null}
+                                  </>
+                                )}
+                              </div>
+                            </>
                           ) : (
-                            <p>{message.content}</p>
+                            <>
+                              <p>{message.content}</p>
+                              <div className="message-msgr-translation">
+                                {speechUi?.translated ? (
+                                  <>
+                                    <div className="message-msgr-divider" aria-hidden />
+                                    <p className="message-msgr-meta">
+                                      Translation · {translateLangLabel(speechUi?.targetLang ?? 'en')}
+                                    </p>
+                                    <p className="message-msgr-translation-body" aria-live="polite">
+                                      {speechUi.translated}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      className="message-msgr-link"
+                                      onClick={() =>
+                                        patchMessageSpeechUi(message.id, {
+                                          translated: undefined,
+                                          error: undefined,
+                                          translateToolsOpen: false
+                                        })
+                                      }
+                                    >
+                                      See original
+                                    </button>
+                                  </>
+                                ) : speechUi?.translateToolsOpen ? (
+                                  <>
+                                    <div className="message-msgr-tools">
+                                      <label className="visually-hidden" htmlFor={`trg-text-${message.id}`}>
+                                        Language
+                                      </label>
+                                      <select
+                                        id={`trg-text-${message.id}`}
+                                        className="message-msgr-select"
+                                        value={speechUi?.targetLang ?? 'en'}
+                                        onChange={(event) =>
+                                          patchMessageSpeechUi(message.id, { targetLang: event.target.value })
+                                        }
+                                      >
+                                        {TRANSLATE_TARGET_LANGS.map((lang) => (
+                                          <option key={lang.code} value={lang.code}>
+                                            {lang.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        type="button"
+                                        className="message-msgr-link"
+                                        disabled={speechUi?.loading === 'translate'}
+                                        onClick={() =>
+                                          void handleTranslateForMessage(
+                                            message,
+                                            message.content,
+                                            speechUi?.targetLang ?? 'en'
+                                          )
+                                        }
+                                      >
+                                        {speechUi?.loading === 'translate' ? 'Translating…' : 'See translation'}
+                                      </button>
+                                    </div>
+                                    {speechUi?.error ? (
+                                      <p className="message-msgr-error" role="alert">
+                                        {speechUi.error}
+                                      </p>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="message-msgr-link"
+                                    onClick={() =>
+                                      patchMessageSpeechUi(message.id, { translateToolsOpen: true })
+                                    }
+                                  >
+                                    See translation
+                                  </button>
+                                )}
+                              </div>
+                            </>
                           )}
 
                           <div className="message-info">
