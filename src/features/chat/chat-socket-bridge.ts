@@ -1,19 +1,19 @@
 import type { Socket } from 'socket.io-client';
-import { SOCKET_ACK_TIMEOUT_MS } from './messenger.constants';
+import { SOCKET_ACK_TIMEOUT_MS } from './chat.constants';
 
 type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
 let activeSocket: Socket | null = null;
 
-export function setMessengerSocketInstance(socket: Socket | null): void {
+export function setChatSocketInstance(socket: Socket | null): void {
   activeSocket = socket;
 }
 
-export function getMessengerSocket(): Socket | null {
+export function getChatSocket(): Socket | null {
   return activeSocket;
 }
 
-export async function messengerEmitWithAck<T>(event: string, payload: unknown): Promise<T> {
+export async function chatEmitWithAck<T>(event: string, payload: unknown): Promise<T> {
   const socket = activeSocket;
   if (!socket) {
     throw new Error('Socket is not connected');

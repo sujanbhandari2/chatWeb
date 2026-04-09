@@ -11,8 +11,8 @@ import { ApiError } from '../../lib/api-error';
 import { isGlobalConversation, normalizeMessage } from '../../utils/chat.utils';
 import type { Message, MessageReaction, MessageType } from '../../types/chat';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../../constants/session.constants';
-import { CLIENT_GOING_OFFLINE_EVENT } from '../../features/chat/messenger.constants';
-import { getMessengerSocket, messengerEmitWithAck } from '../../features/chat/messenger-bridge';
+import { CLIENT_GOING_OFFLINE_EVENT } from '../../features/chat/chat.constants';
+import { chatEmitWithAck, getChatSocket } from '../../features/chat/chat-socket-bridge';
 import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
 import { conversationTitleForUser, findDirectConversation } from './chatStore.utils';
@@ -29,7 +29,7 @@ type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<ChatStore> {
   return {
     handleLogout: () => {
-      const socket = getMessengerSocket();
+      const socket = getChatSocket();
       const user = useAuthStore.getState().user;
       if (socket?.connected && user?.id) {
         socket.emit(CLIENT_GOING_OFFLINE_EVENT, { userId: user.id, reason: 'logout' });
@@ -73,7 +73,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setTenantUsers(data);
     },
 
-    bootstrapMessenger: async () => {
+    bootstrapChatApp: async () => {
       const [loadedConversations] = await Promise.all([get().refreshConversations(), get().refreshUsers()]);
       const persistedConversationId = window.localStorage.getItem(SELECTED_CONVERSATION_STORAGE_KEY);
       const hasPersistedConversation =
@@ -291,7 +291,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         return;
       }
       try {
-        const message = await messengerEmitWithAck<Message>('send_message', {
+        const message = await chatEmitWithAck<Message>('send_message', {
           conversationId: selectedConversationId,
           type: 'TEXT' as MessageType,
           content: text.trim()
@@ -312,7 +312,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       }
       try {
         const uploaded = await uploadFileRequest(file);
-        const message = await messengerEmitWithAck<Message>('send_message', {
+        const message = await chatEmitWithAck<Message>('send_message', {
           conversationId: selectedConversationId,
           type,
           content: uploaded.url
@@ -395,7 +395,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           }
         }
 
-        const socket = getMessengerSocket();
+        const socket = getChatSocket();
         if (!socket?.connected) {
           revertOptimistic();
           get().setError('Not connected — cannot send reaction');
@@ -438,7 +438,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
 
     handleDelete: async (messageId) => {
       try {
-        await messengerEmitWithAck('delete_message', { messageId });
+        await chatEmitWithAck('delete_message', { messageId });
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to delete message');
       }
@@ -446,7 +446,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
 
     handleMarkRead: async (messageId) => {
       try {
-        await messengerEmitWithAck('mark_as_read', { messageId });
+        await chatEmitWithAck('mark_as_read', { messageId });
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to mark as read');
       }

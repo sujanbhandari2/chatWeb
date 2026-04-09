@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react';
 import { configs, widgetConfigExamples } from '../../config/widget.config';
 import { buildWidgetIframeSrc, mergeWidgetPartials } from '../../utils/widget-runtime.utils';
 import {
+  defaultWidgetApp,
+  defaultWidgetFeatures,
   defaultWidgetInitConfig,
   mergeConfig,
   widgetInitConfigSchema,
   type DeepPartialWidgetConfig,
+  type WidgetFeatures,
   type WidgetInitConfig
 } from '../../schemas/widget.schemas';
 import './configurator.css';
@@ -23,6 +26,9 @@ const dc = defaultWidgetInitConfig.colors!;
 const dt = defaultWidgetInitConfig.typography!;
 const ds = defaultWidgetInitConfig.spacing!;
 const dl = defaultWidgetInitConfig.launcher!;
+const da = defaultWidgetApp;
+
+const WIDGET_FEATURE_KEYS = Object.keys(defaultWidgetFeatures) as (keyof WidgetFeatures)[];
 
 function ColorHexField({
   label,
@@ -55,7 +61,7 @@ export function WidgetConfigView(): JSX.Element {
   const [cfg, setCfg] = useState<WidgetInitConfig>(() => mergeConfig({}));
   const [previewNonce, setPreviewNonce] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [copiedJson, setCopiedJson] = useState(false);
+  const [copiedJsonKind, setCopiedJsonKind] = useState<null | 'customer' | 'full'>(null);
   const [presetKey, setPresetKey] = useState('');
 
   const { iframeSrc, error } = useMemo(() => {
@@ -120,17 +126,38 @@ export function WidgetConfigView(): JSX.Element {
     }
   };
 
-  const copyFullJson = async (): Promise<void> => {
+  /** Omit host-controlled sections from JSON meant for customers / embed docs. */
+  const copyUserFacingJson = async (): Promise<void> => {
+    const parsed = widgetInitConfigSchema.safeParse(cfg);
+    if (!parsed.success) {
+      return;
+    }
+    const out = { ...parsed.data } as Record<string, unknown>;
+    delete out.backend;
+    delete out.styling;
+    delete out.features;
+    delete out.app;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(out, null, 2));
+      setCopiedJsonKind('customer');
+      window.setTimeout(() => setCopiedJsonKind(null), 2000);
+    } catch {
+      setCopiedJsonKind(null);
+    }
+  };
+
+  /** Full validated config for mobile/native apps (includes backend + styling). */
+  const copyFullConfigJson = async (): Promise<void> => {
     const parsed = widgetInitConfigSchema.safeParse(cfg);
     if (!parsed.success) {
       return;
     }
     try {
       await navigator.clipboard.writeText(JSON.stringify(parsed.data, null, 2));
-      setCopiedJson(true);
-      window.setTimeout(() => setCopiedJson(false), 2000);
+      setCopiedJsonKind('full');
+      window.setTimeout(() => setCopiedJsonKind(null), 2000);
     } catch {
-      setCopiedJson(false);
+      setCopiedJsonKind(null);
     }
   };
 
@@ -145,12 +172,12 @@ export function WidgetConfigView(): JSX.Element {
       <header className="hc-config-header">
         <h1>HealthChat widget configurator</h1>
         <p>
-          Edit the full <code>WidgetInitConfig</code> (same shape as <code>src/config/widget.config.ts</code>). Load
-          built-in <strong>profiles</strong> and <strong>examples</strong> from that file, then use{' '}
-          <strong>Copy full JSON</strong> to paste into your profile in source. With <code>npm run dev</code>, the{' '}
-          <strong>live iframe</strong> also receives <strong>theme colors</strong> (preview flag + color query params).
-          API URLs, panel title, typography, and other profile fields still ship via <code>widget.config.ts</code> for
-          production; production widget builds ignore color query overrides.
+          Preview uses merged <code>widget.config.ts</code> profile + your edits below.{' '}
+          <strong>Copy JSON (customer)</strong> omits <code>backend</code>, <code>styling</code>, <code>features</code>,
+          and <code>app</code> for public embed docs.{' '}
+          <strong>Copy full JSON</strong> is the complete <code>WidgetInitConfig</code> for mobile/native developers (
+          same shape as <code>widget.config.full.example.json</code>). With <code>npm run dev</code>, the live iframe
+          receives theme colors (preview flag + color query params); production embeds ignore color query overrides.
         </p>
       </header>
 
@@ -193,34 +220,6 @@ export function WidgetConfigView(): JSX.Element {
               placeholder="https://your-host/widget.html"
             />
           </div>
-
-          <h2>Tenant (embed-safe)</h2>
-          <div className="hc-config-field">
-            <label htmlFor="hc-tenant">tenantId</label>
-            <input
-              id="hc-tenant"
-              type="text"
-              value={cfg.backend?.tenantId ?? ''}
-              onChange={(e) => patch({ backend: { tenantId: e.target.value.trim() || undefined } })}
-              placeholder="UUID"
-            />
-          </div>
-          <label className="hc-config-check">
-            <input
-              type="checkbox"
-              checked={cfg.backend?.lockTenant ?? false}
-              onChange={(e) => patch({ backend: { lockTenant: e.target.checked } })}
-            />
-            lockTenant
-          </label>
-          <label className="hc-config-check">
-            <input
-              type="checkbox"
-              checked={cfg.backend?.hideTenantField ?? false}
-              onChange={(e) => patch({ backend: { hideTenantField: e.target.checked } })}
-            />
-            hideTenantField
-          </label>
 
           <h2>Colors</h2>
           <p className="hc-config-subhead">Palette</p>
@@ -600,46 +599,50 @@ export function WidgetConfigView(): JSX.Element {
             />
           </div>
 
-          <h2>Backend (profile — not in embed URL)</h2>
-          <div className="hc-config-field">
-            <label htmlFor="hc-api">apiUrl</label>
-            <input
-              id="hc-api"
-              type="url"
-              value={cfg.backend?.apiUrl ?? ''}
-              onChange={(e) => patch({ backend: { apiUrl: e.target.value.trim() || undefined } })}
-              placeholder="https://host/api"
-            />
+          <h2>Features</h2>
+          <p className="hc-config-note">
+            Tenant / build-time toggles only — not settable from embed URL or <code>window.__HEALTHCHAT_WIDGET_CONFIG__</code>.
+          </p>
+          <div className="hc-config-check-grid">
+            {WIDGET_FEATURE_KEYS.map((key) => (
+              <label key={key} className="hc-config-check">
+                <input
+                  type="checkbox"
+                  checked={cfg.features?.[key] ?? defaultWidgetFeatures[key]}
+                  onChange={(e) => patch({ features: { [key]: e.target.checked } })}
+                />
+                {key}
+              </label>
+            ))}
           </div>
+
+          <h2>App / versioning</h2>
+          <p className="hc-config-note">
+            <code>configSchemaVersion</code> documents breaking JSON shape changes. <code>releaseVersion</code> defaults from
+            the app build when omitted in profile JSON.
+          </p>
           <div className="hc-config-field">
-            <label htmlFor="hc-sock">socketUrl</label>
+            <label htmlFor="hc-app-schema">app.configSchemaVersion</label>
             <input
-              id="hc-sock"
-              type="url"
-              value={cfg.backend?.socketUrl ?? ''}
-              onChange={(e) => patch({ backend: { socketUrl: e.target.value.trim() || undefined } })}
-              placeholder="wss://host"
-            />
-          </div>
-          <div className="hc-config-field">
-            <label htmlFor="hc-to">apiTimeout (ms)</label>
-            <input
-              id="hc-to"
+              id="hc-app-schema"
               type="number"
-              min={1000}
-              value={cfg.backend?.apiTimeout ?? 30000}
-              onChange={(e) => patch({ backend: { apiTimeout: Number(e.target.value) || 30000 } })}
+              min={1}
+              value={cfg.app?.configSchemaVersion ?? da.configSchemaVersion}
+              onChange={(e) =>
+                patch({ app: { configSchemaVersion: Math.max(1, Number(e.target.value) || 1) } })
+              }
             />
           </div>
           <div className="hc-config-field">
-            <label htmlFor="hc-retry">retryAttempts</label>
+            <label htmlFor="hc-app-release">app.releaseVersion (optional override)</label>
             <input
-              id="hc-retry"
-              type="number"
-              min={0}
-              max={10}
-              value={cfg.backend?.retryAttempts ?? 3}
-              onChange={(e) => patch({ backend: { retryAttempts: Number(e.target.value) || 0 } })}
+              id="hc-app-release"
+              type="text"
+              value={cfg.app?.releaseVersion ?? ''}
+              placeholder={`default: ${import.meta.env.VITE_APP_VERSION}`}
+              onChange={(e) =>
+                patch({ app: { releaseVersion: e.target.value.trim() || undefined } })
+              }
             />
           </div>
 
@@ -706,10 +709,18 @@ export function WidgetConfigView(): JSX.Element {
             <button
               type="button"
               className="hc-config-btn-secondary"
-              onClick={copyFullJson}
+              onClick={copyUserFacingJson}
               disabled={Boolean(error)}
             >
-              {copiedJson ? 'JSON copied!' : 'Copy full JSON'}
+              {copiedJsonKind === 'customer' ? 'Copied!' : 'Copy JSON (customer)'}
+            </button>
+            <button
+              type="button"
+              className="hc-config-btn-secondary"
+              onClick={copyFullConfigJson}
+              disabled={Boolean(error)}
+            >
+              {copiedJsonKind === 'full' ? 'Copied!' : 'Copy full JSON (mobile)'}
             </button>
             <button type="button" className="hc-config-btn-secondary" onClick={() => setCfg(mergeConfig({}))}>
               Reset to defaults
@@ -743,7 +754,8 @@ export function WidgetConfigView(): JSX.Element {
       </div>
 
       <p className="hc-config-footnote">
-        Open this page at <code>/config.html</code>. Production embed guide: <code>docs/WIDGET_EMBED.md</code>. Loader:{' '}
+        Open this page at <code>/config.html</code>. Customer JSON sample: <code>widget.config.example.json</code>. Full
+        schema sample (mobile/native): <code>widget.config.full.example.json</code>. Loader:{' '}
         <code>public/healthchat-widget-loader.js</code>.
       </p>
     </div>

@@ -78,7 +78,11 @@
     return u.toString();
   }
 
-  function iframeBox(config) {
+  /**
+   * Iframe outer size in host pixels. Keep in sync with getWidgetEmbedIframeSizePx in
+   * src/utils/widget-embed-resize.utils.ts (widget posts resize when panel opens/closes).
+   */
+  function iframeBox(config, panelOpen) {
     var w = Number(config.panelWidth) || 380;
     var h = Number(config.panelHeight) || 560;
     var ls = Number(config.launcherSize) || 56;
@@ -86,8 +90,17 @@
     var os = Number(config.offsetSide) || 24;
     var z = Number(config.zIndex) || 2147483000;
     var pos = config.position === 'left' ? 'left' : 'right';
-    var iw = Math.min(w + 40, window.innerWidth - 16);
-    var ih = Math.min(h + ls + 56, window.innerHeight - 16);
+    var vw = window.innerWidth - 16;
+    var vh = window.innerHeight - 16;
+    var iw;
+    var ih;
+    if (panelOpen) {
+      iw = Math.min(w + 40, vw);
+      ih = Math.min(h + ls + 56, vh);
+    } else {
+      iw = Math.min(ls + os + 40, vw);
+      ih = Math.min(ls + ob + 40, vh);
+    }
     return (
       'position:fixed;border:0;background:transparent;' +
       'width:' +
@@ -104,6 +117,11 @@
       z +
       ';overflow:hidden;pointer-events:auto;'
     );
+  }
+
+  function configDefaultOpen(config) {
+    var v = config.defaultOpen;
+    return v === true || v === 'true';
   }
 
   function run() {
@@ -128,8 +146,26 @@
     iframe.src = appendQuery(base, config);
     iframe.title = config.launcherAriaLabel || 'HealthChat';
     iframe.setAttribute('allow', 'microphone');
-    iframe.style.cssText = iframeBox(config);
+    var panelOpen = configDefaultOpen(config);
+    iframe.style.cssText = iframeBox(config, panelOpen);
     document.body.appendChild(iframe);
+
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (ev.source !== iframe.contentWindow) {
+        return;
+      }
+      if (!d || d.source !== 'healthchat-widget' || d.type !== 'resize') {
+        return;
+      }
+      var nw = Number(d.width);
+      var nh = Number(d.height);
+      if (!nw || !nh || nw < 32 || nh < 32) {
+        return;
+      }
+      iframe.style.width = nw + 'px';
+      iframe.style.height = nh + 'px';
+    });
   }
 
   if (document.readyState === 'loading') {

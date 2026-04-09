@@ -136,7 +136,7 @@ Use `@tanstack/react-query`. NEVER `useEffect` + `useState` for data fetching.
 Zustand stores in `store/`. Keep stores minimal — only persistent/global state.
 
 ### Toasts
-Use `toast()` from `common/nds/NdsToaster`. NEVER duplicate toast + inline error for same failure.
+Use `toast()` from `common/NdsToaster`. NEVER duplicate toast + inline error for same failure.
 
 ### Modal Form Reset
 Reset on open, not on close:
@@ -184,7 +184,3 @@ Look at these files as reference implementations:
 - **Error class**: `src/lib/api-error.ts`
 - **Settings page (inline edit)**: `src/pages/settings/price-adjustment/PriceAdjustmentDriversView.tsx`
 - **Settings page (table + notes)**: `src/pages/settings/project-pnl/ProjectPnlView.tsx`
-
----
-alwaysApply: true
----

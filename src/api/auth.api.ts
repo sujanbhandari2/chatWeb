@@ -1,4 +1,4 @@
-import { API_PATHS } from '../constants/api.constants';
+import { API_PATHS } from '../constants/api.constant';
 import { apiService } from '../lib/api-service';
 import type { LoginInput, RegisterInput } from '../schemas/auth.schemas';
 import type { CreateAccountResponse } from '../types/chat';

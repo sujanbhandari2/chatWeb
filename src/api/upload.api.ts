@@ -1,4 +1,4 @@
-import { API_PATHS } from '../constants/api.constants';
+import { API_PATHS } from '../constants/api.constant';
 import { apiAxios } from '../lib/axios';
 import { ApiError } from '../lib/api-error';
 import type { UploadFileResponse } from '../types/chat';

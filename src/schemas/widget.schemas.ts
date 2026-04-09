@@ -1,129 +1,26 @@
 import { z } from 'zod';
+import { a11ySchema } from './widget/a11y.schema';
+import { appSchema, defaultWidgetApp } from './widget/app.schema';
+import { backendSchema } from './widget/backend.schema';
+import { colorPaletteSchema } from './widget/color.schema';
+import { defaultWidgetFeatures, featuresSchema } from './widget/features.schema';
+import { interactionSchema } from './widget/interaction.schema';
+import { launcherSchema } from './widget/launcher.schema';
+import { spacingSchema } from './widget/spacing.schema';
+import { stylingSchema } from './widget/styling.schema';
+import { typographySchema } from './widget/typography.schema';
+import { uiElementsSchema } from './widget/ui-elements.schema';
 
-/**
- * Color palette schema for comprehensive theming
- */
-const colorPaletteSchema = z.object({
-  primary: z.string().default('#2563eb'),
-  secondary: z.string().default('#64748b'),
-  accent: z.string().default('#f59e0b'),
-  background: z.string().default('#ffffff'),
-  surface: z.string().default('#f8fafc'),
-  border: z.string().default('#e2e8f0'),
-  text: z.object({
-    primary: z.string().default('#1e293b'),
-    secondary: z.string().default('#64748b'),
-    tertiary: z.string().default('#94a3b8'),
-    inverse: z.string().default('#ffffff'),
-  }),
-  status: z.object({
-    success: z.string().default('#10b981'),
-    error: z.string().default('#ef4444'),
-    warning: z.string().default('#f59e0b'),
-    info: z.string().default('#0ea5e9'),
-  }),
-});
-
-/**
- * Typography schema for consistent font styling
- */
-const typographySchema = z.object({
-  fontFamily: z.string().default('Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'),
-  fontSize: z.object({
-    xs: z.number().positive().default(12),
-    sm: z.number().positive().default(14),
-    base: z.number().positive().default(16),
-    lg: z.number().positive().default(18),
-    xl: z.number().positive().default(20),
-    '2xl': z.number().positive().default(24),
-  }),
-  fontWeight: z.object({
-    light: z.number().default(300),
-    normal: z.number().default(400),
-    medium: z.number().default(500),
-    semibold: z.number().default(600),
-    bold: z.number().default(700),
-  }),
-  lineHeight: z.number().positive().default(1.5),
-  letterSpacing: z.number().default(0),
-});
-
-/**
- * Spacing and sizing schema
- */
-const spacingSchema = z.object({
-  offsetBottom: z.number().nonnegative().default(24),
-  offsetSide: z.number().nonnegative().default(24),
-  launcherSize: z.number().positive().default(56),
-  panelWidth: z.number().positive().default(380),
-  panelHeight: z.number().positive().default(560),
-  panelMaxWidth: z.string().optional(),
-  panelMaxHeight: z.string().optional(),
-  panelBorderRadius: z.string().default('12px'),
-  panelBoxShadow: z.string().default('0 12px 40px rgba(15, 23, 42, 0.15)'),
-});
-
-/**
- * Launcher (floating button) schema
- */
-const launcherSchema = z.object({
-  size: z.number().positive().default(56),
-  iconUrl: z.string().optional(),
-  ariaLabel: z.string().default('Open chat'),
-  position: z.enum(['left', 'right', 'bottom-left', 'bottom-right']).default('right'),
-  badge: z.object({
-    enabled: z.boolean().default(false),
-    backgroundColor: z.string().default('#ef4444'),
-    textColor: z.string().default('#ffffff'),
-    count: z.number().nonnegative().optional(),
-  }).optional(),
-});
-
-/**
- * Animation and interaction schema
- */
-const interactionSchema = z.object({
-  closeOnEscape: z.boolean().default(true),
-  closeOnClickOutside: z.boolean().default(true),
-  defaultOpen: z.boolean().default(false),
-  animationEnabled: z.boolean().default(true),
-  animationDuration: z.number().nonnegative().default(300),
-});
-
-/**
- * Header and UI elements schema
- */
-const uiElementsSchema = z.object({
-  panelTitle: z.string().optional(),
-  showHeader: z.boolean().default(true),
-  showFooter: z.boolean().default(true),
-  showBranding: z.boolean().default(false),
-  brandingText: z.string().optional(),
-  headerIconUrl: z.string().optional(),
-});
-
-/**
- * Tenant and API configuration schema
- */
-const backendSchema = z.object({
-  tenantId: z.string().optional(),
-  lockTenant: z.boolean().default(false),
-  hideTenantField: z.boolean().default(false),
-  apiUrl: z.string().optional(),
-  socketUrl: z.string().optional(),
-  apiTimeout: z.number().positive().default(30000),
-  retryAttempts: z.number().nonnegative().default(3),
-});
-
-/**
- * Accessibility schema
- */
-const a11ySchema = z.object({
-  ariaLabel: z.string().default('Chat widget'),
-  ariaDescribedBy: z.string().optional(),
-  reduceMotion: z.boolean().default(false),
-  highContrast: z.boolean().default(false),
-});
+export {
+  appSchema,
+  defaultWidgetApp,
+} from './widget/app.schema';
+export type { WidgetApp } from './widget/app.schema';
+export {
+  defaultWidgetFeatures,
+  featuresSchema,
+} from './widget/features.schema';
+export type { WidgetFeatures } from './widget/features.schema';
 
 /**
  * Main widget configuration schema — single source of truth
@@ -131,28 +28,26 @@ const a11ySchema = z.object({
 export const widgetInitConfigSchema = z.object({
   // Core branding & colors
   colors: colorPaletteSchema.optional(),
-  
   // Typography
   typography: typographySchema.optional(),
-  
   // Layout & spacing
   spacing: spacingSchema.optional(),
-  
   // Launcher (floating button)
   launcher: launcherSchema.optional(),
-  
   // Interactions
   interactions: interactionSchema.optional(),
-  
   // UI Elements
   uiElements: uiElementsSchema.optional(),
-  
   // Backend/API
   backend: backendSchema.optional(),
-  
   // Accessibility
   a11y: a11ySchema.optional(),
-  
+  /** Admin/build: optional host CSS hooks (`.{classPrefix}-root`, …); ignored from embed URL/window. */
+  styling: stylingSchema.default({ classPrefix: 'vitafy-chat' }),
+  /** Feature gates for multi-tenant widget builds; not overridable from untrusted embed config. */
+  features: featuresSchema.default(defaultWidgetFeatures),
+  /** Schema version + release string; not overridable from untrusted embed config. */
+  app: appSchema.default(defaultWidgetApp),
   // Global settings
   zIndex: z.number().default(99999),
   debug: z.boolean().default(false),
@@ -319,10 +214,19 @@ const defaultLauncherBadge = {
   textColor: '#ffffff'
 } as const;
 
+function defaultReleaseVersionFromEnv(): string {
+  return typeof import.meta !== 'undefined' && import.meta.env?.VITE_APP_VERSION
+    ? String(import.meta.env.VITE_APP_VERSION)
+    : 'dev';
+}
+
 export function mergeConfig(custom?: DeepPartialWidgetConfig): WidgetInitConfig {
   const dc = defaultWidgetInitConfig.colors!;
   const dt = defaultWidgetInitConfig.typography!;
   const dl = defaultWidgetInitConfig.launcher!;
+  const df = defaultWidgetInitConfig.features!;
+  const da = defaultWidgetInitConfig.app!;
+  const mergedAppBase = { ...da, ...custom?.app };
   return widgetInitConfigSchema.parse({
     ...defaultWidgetInitConfig,
     ...custom,
@@ -354,7 +258,15 @@ export function mergeConfig(custom?: DeepPartialWidgetConfig): WidgetInitConfig 
     interactions: { ...defaultWidgetInitConfig.interactions, ...custom?.interactions },
     uiElements: { ...defaultWidgetInitConfig.uiElements, ...custom?.uiElements },
     backend: { ...defaultWidgetInitConfig.backend, ...custom?.backend },
-    a11y: { ...defaultWidgetInitConfig.a11y, ...custom?.a11y }
+    a11y: { ...defaultWidgetInitConfig.a11y, ...custom?.a11y },
+    features: { ...df, ...custom?.features },
+    app: {
+      ...mergedAppBase,
+      releaseVersion: mergedAppBase.releaseVersion ?? defaultReleaseVersionFromEnv(),
+    },
+    styling: stylingSchema.parse({
+      classPrefix: custom?.styling?.classPrefix ?? defaultWidgetInitConfig.styling!.classPrefix,
+    }),
   });
 }
 
@@ -375,4 +287,26 @@ export function applyThemePreset(
       status: { ...defaultWidgetInitConfig.colors!.status, ...custom?.colors?.status }
     } as DeepPartialWidgetConfig['colors']
   });
+}
+
+/** UI shell fallbacks when optional `WidgetInitConfig` sections are absent (same as `defaultWidgetInitConfig`). */
+export function resolveWidgetShellSections(config: WidgetInitConfig): {
+  interactions: NonNullable<WidgetInitConfig['interactions']>;
+  spacing: NonNullable<WidgetInitConfig['spacing']>;
+  launcher: NonNullable<WidgetInitConfig['launcher']>;
+  typography: NonNullable<WidgetInitConfig['typography']>;
+  colors: NonNullable<WidgetInitConfig['colors']>;
+  uiElements: NonNullable<WidgetInitConfig['uiElements']>;
+  styling: NonNullable<WidgetInitConfig['styling']>;
+} {
+  const d = defaultWidgetInitConfig;
+  return {
+    interactions: config.interactions ?? d.interactions!,
+    spacing: config.spacing ?? d.spacing!,
+    launcher: config.launcher ?? d.launcher!,
+    typography: config.typography ?? d.typography!,
+    colors: config.colors ?? d.colors!,
+    uiElements: config.uiElements ?? d.uiElements!,
+    styling: config.styling ?? d.styling!,
+  };
 }

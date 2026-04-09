@@ -1,0 +1,22 @@
+{
+  "$schemaNote": "Illustrative slice only. The canonical full shape is whatever mergeConfig({}) / getWidgetInitConfig() produce in the app — see src/schemas/widget.schemas.ts (widgetInitConfigSchema) and docs/CHAT_WIDGET.md. Prefer editing src/config/widget.config.ts for profiles; avoid duplicating large JSON by hand.",
+  "features": {
+    "imageUpload": true,
+    "audioAttachmentUpload": true,
+    "voiceRecording": true,
+    "createGroup": true,
+    "editGroup": true,
+    "chatListSearch": true,
+    "translateMessages": true,
+    "voiceTranscription": true,
+    "messageReactions": true,
+    "deleteConversation": true
+  },
+  "app": {
+    "configSchemaVersion": 1,
+    "releaseVersion": "optional-build-override"
+  },
+  "uiElements": {
+    "panelTitle": "Example title"
+  }
+}

@@ -171,6 +171,13 @@
   height: 1.1rem;
 }
 
+.hc-config-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.25rem 1rem;
+  margin-bottom: 1rem;
+}
+
 .hc-config-actions {
   display: flex;
   flex-wrap: wrap;

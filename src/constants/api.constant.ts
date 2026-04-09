@@ -10,6 +10,5 @@ export const API_PATHS = {
   SPEECH: {
     TRANSCRIBE: '/speech/transcribe',
     TRANSLATE: '/speech/translate'
-  },
-  HEALTH: '/health'
+  }
 } as const;

@@ -1,25 +1,25 @@
-import { ChatWidgetShell } from '../../features/widget/ChatWidgetShell';
+import { WidgetChat } from '../../features/widget/WidgetChat';
 import { defaultWidgetInitConfig, type WidgetInitConfig } from '../../schemas/widget.schemas';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useChatSelectors } from '../../hooks/useChatSelectors';
-import { AuthForm } from '../../features/auth/AuthForm';
+import { WidgetInitConfigProvider } from '../../contexts/config-provider';
 import { ChatRuntimeProvider } from '../../hooks/ChatRuntimeContext';
 import { useChatRuntime } from '../../hooks/useChatRuntime';
-import { ChatSidebar } from './messenger/ChatSidebar';
-import { ChatThreadView } from './messenger/ChatThreadView';
+import { ChatSidebar } from './chat-app/ChatSidebar';
+import { ChatThreadView } from './chat-app/ChatThreadView';
 
-export type ChatAppShellProps = {
+export type WidgetChatAppProps = {
   widgetConfig?: WidgetInitConfig;
 };
 
-/** Authenticated chat layout: widget chrome, sidebar, and main thread. */
-export default function ChatAppShell({ widgetConfig }: ChatAppShellProps): JSX.Element {
-  const runtime = useChatRuntime();
+/** Chat app for the embed: session, lists, and thread inside the floating widget. */
+export default function WidgetChatApp({ widgetConfig }: WidgetChatAppProps): JSX.Element {
+  const resolvedWidgetConfig = widgetConfig ?? defaultWidgetInitConfig;
+  const runtime = useChatRuntime(resolvedWidgetConfig);
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const sessionHydrated = useAuthStore((s) => s.sessionHydrated);
 
-  const resolvedWidgetConfig = widgetConfig ?? defaultWidgetInitConfig;
   const widgetMissingTenant = Boolean(!resolvedWidgetConfig.backend?.tenantId?.trim());
 
   const { widgetRailPane, selectedConversationId } = useChatSelectors((s) => ({
@@ -27,10 +27,10 @@ export default function ChatAppShell({ widgetConfig }: ChatAppShellProps): JSX.E
     selectedConversationId: s.selectedConversationId,
   }));
 
-  const shellWrap = (node: JSX.Element, panelHeaderCenterText?: string): JSX.Element => (
-    <ChatWidgetShell config={resolvedWidgetConfig} panelHeaderCenterText={panelHeaderCenterText}>
+  const wrapInWidget = (node: JSX.Element, panelHeaderCenterText?: string): JSX.Element => (
+    <WidgetChat config={resolvedWidgetConfig} panelHeaderCenterText={panelHeaderCenterText}>
       {node}
-    </ChatWidgetShell>
+    </WidgetChat>
   );
 
   const panelHeaderLabel =
@@ -45,10 +45,10 @@ export default function ChatAppShell({ widgetConfig }: ChatAppShellProps): JSX.E
   const chatOverlayOpen = Boolean(selectedConversationId) && widgetRailPane === 'chats';
 
   if (!sessionHydrated) {
-    return shellWrap(
+    return wrapInWidget(
       <div className="auth-shell auth-shell--widget">
         <div className="auth-card">
-          <h1>Healthcare Messenger</h1>
+          <h1>Healthcare Chat</h1>
           <p className="auth-subtitle">Restoring your session...</p>
         </div>
       </div>
@@ -56,10 +56,10 @@ export default function ChatAppShell({ widgetConfig }: ChatAppShellProps): JSX.E
   }
 
   if (!token || !user) {
-    return shellWrap(
+    return wrapInWidget(
       <div className="auth-shell auth-shell--widget">
         <div className="auth-card">
-          <h1>Healthcare Messenger</h1>
+          <h1>Healthcare Chat</h1>
           <p className="auth-subtitle">
             Register uses <code>tenantId</code>, name, and email. Login uses a UUID <code>tenantId</code> and email,
             matching server Zod schemas.
@@ -67,18 +67,23 @@ export default function ChatAppShell({ widgetConfig }: ChatAppShellProps): JSX.E
 
           {widgetMissingTenant && (
             <p className="error-banner">
-              Missing <code>tenantId</code>. Set it in your widget build profile (
-              <code>src/config/widget.config.ts</code>) or pass <code>tenantId</code> (or <code>tenant</code>) in the
-              embed URL / <code>window.__HEALTHCHAT_WIDGET_CONFIG__.backend.tenantId</code>. API URLs and branding
-              still come only from your build.
+              Missing <code>tenantId</code>. Your host sets the default in <code>src/config/widget.config.ts</code>, or
+              customers can pass <code>tenantId</code> (or <code>tenant</code>) on the widget URL. API and socket URLs
+              are not customer-configurable.
             </p>
           )}
 
-          <AuthForm
+          <div>
+            <h3>
+              User is not authenticated and missing token or user
+            </h3>
+          </div>
+
+          {/* <AuthForm
             widgetMode
             widgetConfig={resolvedWidgetConfig}
             widgetMissingTenant={widgetMissingTenant}
-          />
+          /> */}
         </div>
       </div>
     );
@@ -86,20 +91,22 @@ export default function ChatAppShell({ widgetConfig }: ChatAppShellProps): JSX.E
 
   return (
     <ChatRuntimeProvider value={runtime}>
-      {shellWrap(
-        <div
-          className={`messenger-shell messenger-shell--widget${
-            chatOverlayOpen ? ' messenger-shell--widget-chat' : ''
-          }`}
-        >
-          <aside
-            className="left-rail left-rail--widget-full"
-            aria-hidden={Boolean(selectedConversationId && widgetRailPane === 'chats')}
+      {wrapInWidget(
+        <WidgetInitConfigProvider value={resolvedWidgetConfig}>
+          <div
+            className={`chat-app-shell chat-app-shell--widget${
+              chatOverlayOpen ? ' chat-app-shell--widget-chat' : ''
+            }`}
           >
-            <ChatSidebar />
-          </aside>
-          <ChatThreadView />
-        </div>,
+            <aside
+              className="left-rail left-rail--widget-full"
+              aria-hidden={Boolean(selectedConversationId && widgetRailPane === 'chats')}
+            >
+              <ChatSidebar />
+            </aside>
+            <ChatThreadView />
+          </div>
+        </WidgetInitConfigProvider>,
         panelHeaderLabel
       )}
     </ChatRuntimeProvider>

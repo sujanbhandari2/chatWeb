@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
-import { NdsToaster } from '../common/nds/NdsToaster';
+import { NdsToaster } from '../common/ui/Toaster';
 import { useAuthStore } from '../store/useAuthStore';
 import { queryClient } from './query-client';
 

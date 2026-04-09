@@ -2,18 +2,20 @@ import { useEffect, useId, useRef } from 'react';
 import type { DeliveredReceipt, Message, ReadReceipt } from '../types/chat';
 import { useChatSocket } from './useChatSocket';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../constants/session.constants';
-import { CLIENT_GOING_OFFLINE_EVENT } from '../features/chat/messenger.constants';
-import { setMessengerSocketInstance } from '../features/chat/messenger-bridge';
+import { CLIENT_GOING_OFFLINE_EVENT } from '../features/chat/chat.constants';
+import { setChatSocketInstance } from '../features/chat/chat-socket-bridge';
 import { pickPresence, pickUserId } from '../utils/chat.utils';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
 import { useChatStore } from '../store/useChatStore';
+import type { WidgetInitConfig } from '../schemas/widget.schemas';
 import { ChatRuntimeValue } from './ChatRuntimeContext';
 
 type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
 /** Socket sync, scroll, menus, recording, and bootstrap for the chat UI. */
-export function useChatRuntime(): ChatRuntimeValue {
+export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue {
+  const { voiceRecording } = widgetConfig.features;
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
@@ -32,8 +34,8 @@ export function useChatRuntime(): ChatRuntimeValue {
   const editGroupFormId = useId().replace(/:/g, '');
 
   useEffect(() => {
-    setMessengerSocketInstance(socket ?? null);
-    return () => setMessengerSocketInstance(null);
+    setChatSocketInstance(socket ?? null);
+    return () => setChatSocketInstance(null);
   }, [socket]);
 
   const {
@@ -439,7 +441,7 @@ export function useChatRuntime(): ChatRuntimeValue {
     let cancelled = false;
     const bootstrap = async (): Promise<void> => {
       try {
-        await useChatStore.getState().bootstrapMessenger();
+        await useChatStore.getState().bootstrapChatApp();
       } catch (err) {
         if (cancelled) {
           return;
@@ -465,6 +467,9 @@ export function useChatRuntime(): ChatRuntimeValue {
   }, [token]);
 
   const startRecording = async (): Promise<void> => {
+    if (!voiceRecording) {
+      return;
+    }
     const store = useChatStore.getState();
     const authToken = useAuthStore.getState().token;
     if (!authToken || !store.selectedConversationId || store.isRecording) {

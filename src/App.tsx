@@ -1,8 +1,11 @@
-import ChatAppView, { type ChatAppViewProps } from './pages/chat/ChatAppView';
+import type { WidgetInitConfig } from './schemas/widget.schemas';
+import WidgetChatApp from './pages/chat/widget-chat-app';
 
-export type AppProps = ChatAppViewProps;
+export type AppProps = {
+  widgetConfig?: WidgetInitConfig;
+};
 
-/** Root app: widget-style messenger (same entry as embed). */
-export default function App(props: ChatAppViewProps = {}): JSX.Element {
-  return <ChatAppView widgetConfig={props.widgetConfig} />;
+/** Root app: full chat UI inside the floating widget. */
+export default function App(props: AppProps = {}): JSX.Element {
+  return <WidgetChatApp widgetConfig={props.widgetConfig} />;
 }

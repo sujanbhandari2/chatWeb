@@ -105,7 +105,7 @@
 }
 
 /*
- * Demo layout only: scope under .chat-panel so real messenger UI (.chat-header in styles.css)
+ * Demo layout only: scope under .chat-panel so real chat app UI (.chat-header in styles.css)
  * keeps normal title colors (text-primary), not text-inverse leaking onto person/conversation names.
  */
 .chat-panel .chat-header {

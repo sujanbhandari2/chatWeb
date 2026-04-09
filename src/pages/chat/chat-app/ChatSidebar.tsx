@@ -2,8 +2,9 @@ import type { RefObject } from 'react';
 import { isGlobalConversation, userDisplayName, userInitials } from '../../../utils/chat.utils';
 import { useAuthStore } from '../../../store/useAuthStore';
 import { useChatSelectors } from '../../../hooks/useChatSelectors';
-import { AvatarWithPresence } from '../../../features/chat/messenger-ui';
+import { AvatarWithPresence } from '../../../features/chat/chat-ui';
 import { useChatRuntimeContext } from '../../../hooks/ChatRuntimeContext';
+import { useWidgetFeatures } from '../../../hooks/useWidgetInitConfig';
 
 import {
   useConversationSubtitleGetter,
@@ -20,6 +21,7 @@ import { EditGroupForm } from './EditGroupForm';
 
 /** Left column: conversation list, people directory, and inline group create/edit flows. */
 export function ChatSidebar(): JSX.Element {
+  const features = useWidgetFeatures();
   const { user } = useAuthStore(useShallow((s) => ({ user: s.user })));
 
   const {
@@ -238,33 +240,37 @@ export function ChatSidebar(): JSX.Element {
                     >
                       Suggested people
                     </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="rail-menu-item rail-menu-item--widget-suggest"
-                      onClick={() => {
-                        setWidgetInboxMenuOpen(false);
-                        openGroupModal();
-                      }}
-                    >
-                      New group
-                    </button>
+                    {features.createGroup && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="rail-menu-item rail-menu-item--widget-suggest"
+                        onClick={() => {
+                          setWidgetInboxMenuOpen(false);
+                          openGroupModal();
+                        }}
+                      >
+                        New group
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
-              <label className="widget-chats-search-label">
-                <span className="visually-hidden">Search your chats</span>
-                <input
-                  className="quick-chat-search widget-chats-search-input"
-                  type="search"
-                  value={widgetChatSearchQuery}
-                  onChange={(event) => setWidgetChatSearchQuery(event.target.value)}
-                  placeholder="Search chats…"
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-label="Search chats"
-                />
-              </label>
+              {features.chatListSearch && (
+                <label className="widget-chats-search-label">
+                  <span className="visually-hidden">Search your chats</span>
+                  <input
+                    className="quick-chat-search widget-chats-search-input"
+                    type="search"
+                    value={widgetChatSearchQuery}
+                    onChange={(event) => setWidgetChatSearchQuery(event.target.value)}
+                    placeholder="Search chats…"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="Search chats"
+                  />
+                </label>
+              )}
             </div>
             {filteredConversationsForSidebar.map((conversation) => {
               const unreadCount = unreadByConversation[conversation.id] ?? 0;

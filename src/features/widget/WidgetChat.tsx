@@ -1,12 +1,16 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { defaultWidgetInitConfig, type WidgetInitConfig } from '../../schemas/widget.schemas';
+import { resolveWidgetShellSections, type WidgetInitConfig } from '../../schemas/widget.schemas';
 import { applyWidgetCssVariables } from '../../utils/widget-css-variables.utils';
+import { postWidgetEmbedResizeToParent } from '../../utils/widget-embed-resize.utils';
 
-type ChatWidgetShellProps = {
+function cn(...parts: Array<string | undefined | false>): string {
+  return parts.filter(Boolean).join(' ');
+}
+
+export type WidgetChatProps = {
   config: WidgetInitConfig;
   children: ReactNode;
-  /** Shown in the panel header when `config.uiElements.panelTitle` is not set (e.g. "Chats"). */
   panelHeaderCenterText?: string;
 };
 
@@ -22,18 +26,18 @@ function isHorizontalLeft(position: string): boolean {
   return position === 'left' || position === 'bottom-left';
 }
 
-export function ChatWidgetShell({ config, children, panelHeaderCenterText }: ChatWidgetShellProps): JSX.Element {
+/** Floating chat button and slide-out panel; renders `children` inside the panel. */
+export function WidgetChat({ config, children, panelHeaderCenterText }: WidgetChatProps): JSX.Element {
   const panelId = useId().replace(/:/g, '');
   const rootRef = useRef<HTMLDivElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const configRef = useRef(config);
+  configRef.current = config;
 
-  const interactions = config.interactions ?? defaultWidgetInitConfig.interactions!;
-  const spacing = config.spacing ?? defaultWidgetInitConfig.spacing!;
-  const launcher = config.launcher ?? defaultWidgetInitConfig.launcher!;
-  const typography = config.typography ?? defaultWidgetInitConfig.typography!;
-  const colors = config.colors ?? defaultWidgetInitConfig.colors!;
-  const uiElements = config.uiElements ?? defaultWidgetInitConfig.uiElements!;
+  const { interactions, spacing, launcher, typography, colors, uiElements, styling } =
+    resolveWidgetShellSections(config);
+  const brandPrefix = styling.classPrefix;
 
   const [open, setOpen] = useState(interactions.defaultOpen);
 
@@ -108,6 +112,16 @@ export function ChatWidgetShell({ config, children, panelHeaderCenterText }: Cha
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [open, interactions.closeOnClickOutside, close]);
 
+  /** Shrink host iframe when panel closes so transparent area does not block the page (loader listens). */
+  useEffect(() => {
+    const notify = (): void => {
+      postWidgetEmbedResizeToParent(open, configRef.current);
+    };
+    notify();
+    window.addEventListener('resize', notify);
+    return () => window.removeEventListener('resize', notify);
+  }, [open]);
+
   const position = launcher.position;
   const isRight = !isHorizontalLeft(position);
   const launcherSize = launcher.size;
@@ -160,11 +174,11 @@ export function ChatWidgetShell({ config, children, panelHeaderCenterText }: Cha
   const ariaLabel = launcher.ariaLabel;
 
   return (
-    <div ref={rootRef} className="chat-widget-root">
+    <div ref={rootRef} className={cn('vcw-root', `${brandPrefix}-root`)}>
       <button
         ref={launcherRef}
         type="button"
-        className="chat-widget-launcher"
+        className={cn('vcw-launcher', `${brandPrefix}-launcher`)}
         style={launcherStyle}
         aria-expanded={open}
         aria-controls={panelId}
@@ -184,26 +198,48 @@ export function ChatWidgetShell({ config, children, panelHeaderCenterText }: Cha
         <div
           ref={panelRef}
           id={panelId}
-          className="chat-widget-panel"
+          className={cn('vcw-panel', `${brandPrefix}-panel`)}
           style={panelStyle}
           role="dialog"
           aria-modal="true"
           aria-label={panelTitle ?? panelHeaderCenterText ?? ariaLabel}
           tabIndex={-1}
         >
-          <div className="chat-widget-panel-header">
+          <div className={cn('vcw-panel-header', `${brandPrefix}-panel-header`)}>
             {panelTitle ? (
-              <span className="chat-widget-panel-title">{panelTitle}</span>
+              <span className={cn('vcw-panel-title', `${brandPrefix}-panel-title`)}>{panelTitle}</span>
             ) : panelHeaderCenterText ? (
-              <span className="chat-widget-panel-title chat-widget-panel-title--centered">{panelHeaderCenterText}</span>
+              <span
+                className={cn(
+                  'vcw-panel-title',
+                  'vcw-panel-title--centered',
+                  `${brandPrefix}-panel-title`,
+                  `${brandPrefix}-panel-title--centered`,
+                )}
+              >
+                {panelHeaderCenterText}
+              </span>
             ) : (
-              <span className="chat-widget-panel-title chat-widget-panel-title--placeholder" aria-hidden />
+              <span
+                className={cn(
+                  'vcw-panel-title',
+                  'vcw-panel-title--placeholder',
+                  `${brandPrefix}-panel-title`,
+                  `${brandPrefix}-panel-title--placeholder`,
+                )}
+                aria-hidden
+              />
             )}
-            <button type="button" className="chat-widget-panel-close" onClick={close} aria-label="Close chat">
+            <button
+              type="button"
+              className={cn('vcw-panel-close', `${brandPrefix}-panel-close`)}
+              onClick={close}
+              aria-label="Close chat"
+            >
               ×
             </button>
           </div>
-          <div className="chat-widget-panel-body">{children}</div>
+          <div className={cn('vcw-panel-body', `${brandPrefix}-panel-body`)}>{children}</div>
         </div>
       )}
     </div>

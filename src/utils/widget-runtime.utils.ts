@@ -1,18 +1,19 @@
 /**
  * Widget configuration resolution (embed / iframe).
  *
+ * Maintainer docs: **`docs/CHAT_WIDGET.md`**, environment variables: **`docs/ENVIRONMENT.md`**.
+ *
  * **Merge order** (each step overrides the previous): `getWidgetProfilePartial()` from
  * `config/widget.config.ts` → `window.__HEALTHCHAT_WIDGET_CONFIG__` → URL search params
  * (`parseWidgetConfigFromSearchParams`). **Embedders may set tenant routing only** on
  * `backend`: `tenantId`, `lockTenant`, `hideTenantField`. **API URLs, sockets, timeouts, and
- * non-tenant `backend` keys** come only from your built profile. **Branding / typography / a11y**
- * from window/URL are stripped. **Colors** from the URL are ignored in **production**; in **dev**,
+ * non-tenant `backend` keys** come only from your built profile. **Branding / typography / a11y /
+ * styling (e.g. `classPrefix`), `features`, and `app`** from window/URL are stripped. **Colors** from the URL are ignored in **production**; in **dev**,
  * `?__hc_cfg_preview=1` with `primaryColor`, `secondaryColor`, … (see `buildWidgetIframeSrc` option
  * `configuratorPreview`) merges for the configurator iframe only.
- * Call `getWidgetInitConfig()` once at bootstrap
- * (`main-widget.tsx`), then pass the result through the tree (`ChatAppView` → `ChatAppShell` →
- * `ChatWidgetShell`, `AuthForm`) and call `applyWidgetRuntimeFromConfig()` so API base URL,
- * socket URL, and request timeout match `backend`.
+ *
+ * Call **`bootstrapWidgetResolvedConfig()`** from `bootstrap/widget-app-bootstrap.ts` at app entry
+ * (used by `main.tsx` and `main-widget.tsx`), then pass the result through `App` → `WidgetChatApp`.
  *
  * **Also used by:** `buildWidgetIframeSrc` (config preview / loader), `WidgetConfigView`.
  */
@@ -57,8 +58,19 @@ function parseNum(raw: string | null): number | undefined {
 }
 
 function isNestedConfig(o: Record<string, unknown>): boolean {
-  return ['backend', 'colors', 'typography', 'spacing', 'launcher', 'interactions', 'uiElements', 'a11y']
-    .some((key) => key in o);
+  return [
+    'backend',
+    'colors',
+    'typography',
+    'spacing',
+    'launcher',
+    'interactions',
+    'uiElements',
+    'a11y',
+    'styling',
+    'features',
+    'app',
+  ].some((key) => key in o);
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +183,9 @@ export function mergeWidgetPartials(...partials: DeepPartialWidgetConfig[]): Dee
     interactions:mergeSection(acc.interactions,p.interactions),
     uiElements:  mergeSection(acc.uiElements,  p.uiElements),
     a11y:        mergeSection(acc.a11y,        p.a11y),
+    styling:     mergeSection(acc.styling,     p.styling),
+    features:    mergeSection(acc.features,    p.features),
+    app:         mergeSection(acc.app,         p.app),
   }), {});
 }
 
@@ -408,6 +423,9 @@ const CLIENT_VENDOR_TOP_KEYS = [
   'colors',
   'typography',
   'a11y',
+  'styling',
+  'features',
+  'app',
   'zIndex',
   'debug'
 ] as const satisfies readonly (keyof DeepPartialWidgetConfig)[];

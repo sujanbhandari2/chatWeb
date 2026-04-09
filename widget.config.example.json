@@ -1,12 +1,5 @@
 {
-  "$schemaNote": "Use nested keys (below). Legacy flat keys (tenantId, position, panelWidth at root) are still accepted via URL params and window.__HEALTHCHAT_WIDGET_CONFIG__ — see src/utils/widget-runtime.utils.ts legacyFlatToPartialConfig.",
-  "backend": {
-    "tenantId": "00000000-0000-4000-8000-000000000000",
-    "lockTenant": true,
-    "hideTenantField": false,
-    "apiUrl": "",
-    "socketUrl": ""
-  },
+  "$schemaNote": "API URL, socket URL, timeouts, tenant routing, features, and app versioning are fixed in your hosted build (src/config/widget.config.ts). This file is embedder-facing layout/branding only (not features/app). Full merged shape: docs/CHAT_WIDGET.md; minimal sample: widget.config.full.example.json. Optional tenantId via widget URL — src/utils/widget-runtime.utils.ts.",
   "launcher": {
     "position": "right",
     "size": 56,
