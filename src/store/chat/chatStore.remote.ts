@@ -9,10 +9,10 @@ import { transcribeSpeechRequest, translateTextRequest } from '../../api/speech.
 import { fetchMediaBlob } from '../../utils/media.utils';
 import { ApiError } from '../../lib/api-error';
 import { isGlobalConversation, normalizeMessage } from '../../utils/chat.utils';
-import type { Message, MessageReaction, MessageType } from '../../types/chat';
+import { WidgetPanelType, type Message, type MessageReaction, type MessageType } from '../../types/chat';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../../constants/session.constants';
 import { CLIENT_GOING_OFFLINE_EVENT } from '../../features/chat/chat.constants';
-import { chatEmitWithAck, getChatSocket } from '../../features/chat/chat-socket-bridge';
+import { chatEmitWithAck, getChatSocket } from '../../utils/chat-socket-bridge';
 import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
 import { conversationTitleForUser, findDirectConversation } from './chatStore.utils';
@@ -111,13 +111,13 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       try {
         const existing = findDirectConversation(get().conversations, user.id, target.id);
         if (existing) {
-          get().setWidgetRailPane('chats');
+          get().setWidgetRailPane(WidgetPanelType.CHATS);
           await get().selectConversation(existing.id);
           return;
         }
         const createdConversation = await conversationsApi.createDirectConversation(target.id);
         await get().refreshConversations();
-        get().setWidgetRailPane('chats');
+        get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().selectConversation(createdConversation.id);
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to open direct chat');
@@ -148,7 +148,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       try {
         const participantIds = [...new Set([user.id, ...groupSelectedUserIds])];
         const created = await conversationsApi.createGroupConversation(title, participantIds);
-        get().setWidgetRailPane('chats');
+        get().setWidgetRailPane(WidgetPanelType.CHATS);
         get().setGroupTitle('');
         get().setGroupSelectedUserIds([]);
         get().setGroupPickerSearch('');
@@ -208,7 +208,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           await conversationsApi.removeConversationParticipant(convId, user.id);
         }
 
-        get().setWidgetRailPane('chats');
+        get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().refreshConversations();
         if (removedSelf) {
           get().setSelectedConversationId('');
@@ -240,7 +240,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setEditGroupError('');
       try {
         await conversationsApi.removeConversationParticipant(convId, user.id);
-        get().setWidgetRailPane('chats');
+        get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().refreshConversations();
         get().setSelectedConversationId('');
         get().setMessages([]);

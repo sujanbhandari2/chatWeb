@@ -2,6 +2,7 @@ import { userDisplayName } from '../../../utils/chat.utils';
 import { useChatSelectors } from '../../../hooks/useChatSelectors';
 import { useFilteredGroupPickerPeers, useSortedTenantPeers, useUsersById } from '../../../hooks/useChatDerived';
 import { useChatRuntimeContext } from '../../../hooks/ChatRuntimeContext';
+import { WidgetPanelType } from '../../../types/chat';
 
 export function CreateGroupForm(): JSX.Element {
   const { newGroupFormId } = useChatRuntimeContext();
@@ -40,7 +41,7 @@ export function CreateGroupForm(): JSX.Element {
     if (creatingGroup) {
       return;
     }
-    setWidgetRailPane('chats');
+    setWidgetRailPane(WidgetPanelType.CHATS);
     setGroupModalError('');
   };
 

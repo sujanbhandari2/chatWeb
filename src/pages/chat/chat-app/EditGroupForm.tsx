@@ -3,6 +3,7 @@ import { useAuthStore } from '../../../store/useAuthStore';
 import { useChatSelectors } from '../../../hooks/useChatSelectors';
 import { useDisplayNameForParticipant, useFilteredEditGroupPickerPeers } from '../../../hooks/useChatDerived';
 import { useChatRuntimeContext } from '../../../hooks/ChatRuntimeContext';
+import { WidgetPanelType } from '../../../types/chat';
 
 export function EditGroupForm(): JSX.Element {
   const { editGroupFormId } = useChatRuntimeContext();
@@ -43,7 +44,7 @@ export function EditGroupForm(): JSX.Element {
     if (editGroupSaving) {
       return;
     }
-    setWidgetRailPane('chats');
+    setWidgetRailPane(WidgetPanelType.CHATS);
     setEditGroupError('');
   };
 

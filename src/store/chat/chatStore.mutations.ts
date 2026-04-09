@@ -3,7 +3,7 @@
  * and UI-only flows that only call other setters (no network).
  */
 import { normalizeMessage, isGroupConversation } from '../../utils/chat.utils';
-import type { MessageReaction } from '../../types/chat';
+import { WidgetPanelType, type MessageReaction } from '../../types/chat';
 import { useAuthStore } from '../useAuthStore';
 import { chatInitialState, type ChatStore } from './chatStore.types';
 
@@ -150,7 +150,7 @@ export function buildChatMutations(set: SetChat, get: () => ChatStore): Partial<
       get().setChatHeaderMenuOpen(false);
       get().setMessageActionsMenuId(null);
       get().setWidgetInboxMenuOpen(false);
-      get().setWidgetRailPane('chats');
+      get().setWidgetRailPane(WidgetPanelType.CHATS);
       get().setSelectedConversationId('');
     },
 
@@ -159,7 +159,7 @@ export function buildChatMutations(set: SetChat, get: () => ChatStore): Partial<
       get().setGroupTitle('');
       get().setGroupSelectedUserIds([]);
       get().setGroupPickerSearch('');
-      get().setWidgetRailPane('new-group');
+      get().setWidgetRailPane(WidgetPanelType.NEW_GROUP);
     },
 
     addUserToGroupSelection: (userId) =>
@@ -199,7 +199,7 @@ export function buildChatMutations(set: SetChat, get: () => ChatStore): Partial<
       get().setEditGroupParticipantIds([...ids]);
       set({ editGroupInitialParticipantIds: [...ids] });
       get().setEditGroupPickerSearch('');
-      get().setWidgetRailPane('edit-group');
+      get().setWidgetRailPane(WidgetPanelType.EDIT_GROUP);
       get().setChatHeaderMenuOpen(false);
     },
 

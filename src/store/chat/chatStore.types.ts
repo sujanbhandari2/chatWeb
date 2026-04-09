@@ -6,10 +6,12 @@ import type {
   MessageReaction,
   MessageType,
   ReadReceipt,
-  TenantUser
+  TenantUser,
+  WidgetPanelType
 } from '../../types/chat';
 
-export type WidgetRailPane = 'chats' | 'people' | 'new-group' | 'edit-group';
+/** @deprecated Use `WidgetPanelType` from `types/chat`. */
+export type WidgetRailPane = WidgetPanelType;
 
 export type MessageSpeechUiState = {
   transcript?: string;
@@ -47,7 +49,7 @@ export const chatInitialState = {
   isRecording: false,
   socketConnected: false,
   unreadByConversation: {} as Record<string, number>,
-  widgetRailPane: 'chats' as WidgetRailPane,
+  widgetRailPane: 'chats' as WidgetPanelType,
   widgetChatSearchQuery: '',
   widgetInboxMenuOpen: false,
   recordingDurationMs: 0,
@@ -83,7 +85,7 @@ export type ChatActions = {
   setIsRecording: (v: boolean) => void;
   setSocketConnected: (v: boolean) => void;
   setUnreadByConversation: (v: Record<string, number> | ((p: Record<string, number>) => Record<string, number>)) => void;
-  setWidgetRailPane: (p: WidgetRailPane) => void;
+  setWidgetRailPane: (p: WidgetPanelType) => void;
   setWidgetChatSearchQuery: (q: string) => void;
   setWidgetInboxMenuOpen: (v: boolean | ((o: boolean) => boolean)) => void;
   setRecordingDurationMs: (ms: number) => void;

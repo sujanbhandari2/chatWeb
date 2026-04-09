@@ -1,5 +1,3 @@
-import { WidgetInitConfig } from "../schemas/widget.schemas";
-
 /** Prisma conversation type enum — extend as backend adds values */
 export type ConversationType = string;
 
@@ -138,10 +136,6 @@ export interface TranslateResponse {
   };
 }
 
-export interface WidgetChatAppProps {
-  widgetConfig?: WidgetInitConfig;
-}
- 
 export enum WidgetPanelType {
   CHATS = 'chats',
   PEOPLE = 'people',

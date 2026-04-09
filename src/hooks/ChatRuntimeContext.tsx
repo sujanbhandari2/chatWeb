@@ -1,17 +1,7 @@
-import { createContext, useContext, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+import type { ChatRuntimeValue } from '../types/chat-runtime.types';
 
-/** Refs and recording controls shared by chat UI (sidebar, thread, group forms). */
-export type ChatRuntimeValue = {
-  messageScrollerRef: RefObject<HTMLElement | null>;
-  chatHeaderMenuRef: RefObject<HTMLDivElement | null>;
-  /** ⋮ overflow next to the conversation list search */
-  chatsListOverflowMenuRef: RefObject<HTMLDivElement | null>;
-  newGroupFormId: string;
-  editGroupFormId: string;
-  startRecording: () => Promise<void>;
-  finishRecording: () => void;
-  cancelRecording: () => void;
-};
+export type { ChatRuntimeValue } from '../types/chat-runtime.types';
 
 const ChatRuntimeContext = createContext<ChatRuntimeValue | null>(null);
 

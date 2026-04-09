@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef } from 'react';
 import type { DeliveredReceipt, Message, ReadReceipt } from '../types/chat';
+import { WidgetPanelType } from '../types/chat';
 import { useChatSocket } from './useChatSocket';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../constants/session.constants';
 import { CLIENT_GOING_OFFLINE_EVENT } from '../features/chat/chat.constants';
-import { setChatSocketInstance } from '../features/chat/chat-socket-bridge';
+import { setChatSocketInstance } from '../utils/chat-socket-bridge';
 import { pickPresence, pickUserId } from '../utils/chat.utils';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
 import { useChatStore } from '../store/useChatStore';
 import type { WidgetInitConfig } from '../schemas/widget.schemas';
-import { ChatRuntimeValue } from './ChatRuntimeContext';
+import type { ChatRuntimeValue } from '../types/chat-runtime.types';
 
 type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
@@ -150,12 +151,12 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   }, [widgetInboxMenuOpen]);
 
   useEffect(() => {
-    if (widgetRailPane !== 'new-group' || creatingGroup) {
+    if (widgetRailPane !== WidgetPanelType.NEW_GROUP || creatingGroup) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        useChatStore.getState().setWidgetRailPane('chats');
+        useChatStore.getState().setWidgetRailPane(WidgetPanelType.CHATS);
         useChatStore.getState().setGroupModalError('');
       }
     };
@@ -164,12 +165,12 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   }, [widgetRailPane, creatingGroup]);
 
   useEffect(() => {
-    if (widgetRailPane !== 'edit-group' || editGroupSaving) {
+    if (widgetRailPane !== WidgetPanelType.EDIT_GROUP || editGroupSaving) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        useChatStore.getState().setWidgetRailPane('chats');
+        useChatStore.getState().setWidgetRailPane(WidgetPanelType.CHATS);
         useChatStore.getState().setEditGroupError('');
       }
     };

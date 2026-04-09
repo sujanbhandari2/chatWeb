@@ -1,5 +1,5 @@
 import type { Socket } from 'socket.io-client';
-import { SOCKET_ACK_TIMEOUT_MS } from './chat.constants';
+import { SOCKET_ACK_TIMEOUT_MS } from '../features/chat/chat.constants';
 
 type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
