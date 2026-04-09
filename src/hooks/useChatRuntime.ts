@@ -8,6 +8,7 @@ import { setChatSocketInstance } from '../utils/chat-socket-bridge';
 import { pickPresence, pickUserId } from '../utils/chat.utils';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
+import { selectRuntimeSubscriptionSlice } from '../store/chat/chat-selectors';
 import { useChatStore } from '../store/useChatStore';
 import type { WidgetInitConfig } from '../schemas/widget.schemas';
 import type { ChatRuntimeValue } from '../types/chat-runtime.types';
@@ -50,18 +51,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     chatHeaderMenuOpen,
     widgetInboxMenuOpen,
     conversations,
-  } = useChatSelectors((s) => ({
-    selectedConversationId: s.selectedConversationId,
-    messages: s.messages,
-    messageActionsMenuId: s.messageActionsMenuId,
-    isRecording: s.isRecording,
-    widgetRailPane: s.widgetRailPane,
-    creatingGroup: s.creatingGroup,
-    editGroupSaving: s.editGroupSaving,
-    chatHeaderMenuOpen: s.chatHeaderMenuOpen,
-    widgetInboxMenuOpen: s.widgetInboxMenuOpen,
-    conversations: s.conversations,
-  }));
+  } = useChatSelectors(selectRuntimeSubscriptionSlice);
 
   useEffect(() => {
     if (!isRecording) {
@@ -156,8 +146,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        useChatStore.getState().setWidgetRailPane(WidgetPanelType.CHATS);
-        useChatStore.getState().setGroupModalError('');
+        useChatStore.getState().exitNewGroupRailToChats();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -170,8 +159,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        useChatStore.getState().setWidgetRailPane(WidgetPanelType.CHATS);
-        useChatStore.getState().setEditGroupError('');
+        useChatStore.getState().exitEditGroupRailToChats();
       }
     };
     window.addEventListener('keydown', onKeyDown);

@@ -98,6 +98,10 @@ export type ChatActions = {
   clearMessageSpeechOnConversationChange: () => void;
   widgetBackToInbox: () => void;
   openGroupModal: () => void;
+  /** Leave new-group rail to chats (no-op while `creatingGroup`). */
+  exitNewGroupRailToChats: () => void;
+  /** Leave edit-group rail to chats (no-op while `editGroupSaving`). */
+  exitEditGroupRailToChats: () => void;
   addUserToGroupSelection: (userId: string) => void;
   removeUserFromGroupSelection: (userId: string) => void;
   addEditGroupMember: (userId: string) => void;

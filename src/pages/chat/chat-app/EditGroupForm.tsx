@@ -1,14 +1,10 @@
 import { userDisplayName } from '../../../utils/chat.utils';
-import { useAuthStore } from '../../../store/useAuthStore';
-import { useChatSelectors } from '../../../hooks/useChatSelectors';
-import { useDisplayNameForParticipant, useFilteredEditGroupPickerPeers } from '../../../hooks/useChatDerived';
-import { useChatRuntimeContext } from '../../../hooks/ChatRuntimeContext';
-import { WidgetPanelType } from '../../../types/chat';
+import { useEditGroupFormState } from '../../../hooks/useEditGroupFormState';
 
 export function EditGroupForm(): JSX.Element {
-  const { editGroupFormId } = useChatRuntimeContext();
-  const user = useAuthStore((s) => s.user);
   const {
+    editGroupFormId,
+    user,
     editGroupTitle,
     setEditGroupTitle,
     editGroupParticipantIds,
@@ -18,34 +14,15 @@ export function EditGroupForm(): JSX.Element {
     editGroupSaving,
     handleSaveEditGroup,
     handleLeaveGroup,
-    setWidgetRailPane,
-    setEditGroupError,
     addEditGroupMember,
     removeEditGroupMember,
-  } = useChatSelectors((s) => ({
-    editGroupTitle: s.editGroupTitle,
-    setEditGroupTitle: s.setEditGroupTitle,
-    editGroupParticipantIds: s.editGroupParticipantIds,
-    editGroupPickerSearch: s.editGroupPickerSearch,
-    setEditGroupPickerSearch: s.setEditGroupPickerSearch,
-    editGroupError: s.editGroupError,
-    editGroupSaving: s.editGroupSaving,
-    handleSaveEditGroup: s.handleSaveEditGroup,
-    handleLeaveGroup: s.handleLeaveGroup,
-    setWidgetRailPane: s.setWidgetRailPane,
-    setEditGroupError: s.setEditGroupError,
-    addEditGroupMember: s.addEditGroupMember,
-    removeEditGroupMember: s.removeEditGroupMember,
-  }));
-  const filteredEditGroupPickerPeers = useFilteredEditGroupPickerPeers();
-  const displayNameForParticipantId = useDisplayNameForParticipant();
+    filteredEditGroupPickerPeers,
+    displayNameForParticipantId,
+    exitEditGroupRailToChats,
+  } = useEditGroupFormState();
 
   const onCancel = (): void => {
-    if (editGroupSaving) {
-      return;
-    }
-    setWidgetRailPane(WidgetPanelType.CHATS);
-    setEditGroupError('');
+    exitEditGroupRailToChats();
   };
 
   const formFields = (

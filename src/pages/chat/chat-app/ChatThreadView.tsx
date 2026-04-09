@@ -1,4 +1,5 @@
 import type { LegacyRef } from 'react';
+import { useChatStore } from '../../../store/useChatStore';
 import { toAbsoluteMediaUrl } from '../../../utils/media.utils';
 import {
   getMessageType,
@@ -8,9 +9,6 @@ import {
   userDisplayName,
   userInitials
 } from '../../../utils/chat.utils';
-import { useAuthStore } from '../../../store/useAuthStore';
-import { useChatSelectors } from '../../../hooks/useChatSelectors';
-import { useChatStore } from '../../../store/useChatStore';
 import {
   QUICK_REACTION_EMOJIS,
   TRANSLATE_TARGET_LANGS,
@@ -26,22 +24,13 @@ import {
   formatRecordingDuration,
   getDeliveryStatus
 } from '../../../features/chat/chat-ui';
-import {
-  useConversationSubtitleGetter,
-  useConversationTitleGetter,
-  useSelectedConversation,
-  useSelectedDirectPeerId,
-  useUsersById
-} from '../../../hooks/useChatDerived';
-import { useChatRuntimeContext } from '../../../hooks/ChatRuntimeContext';
-import { useWidgetFeatures } from '../../../hooks/useWidgetInitConfig';
+import { useChatThreadState } from '../../../hooks/useChatThreadState';
 
 /** Active conversation: header, message list, composer, and recording bar. */
 export function ChatThreadView(): JSX.Element {
-  const features = useWidgetFeatures();
-  const user = useAuthStore((s) => s.user);
-
   const {
+    features,
+    user,
     selectedConversationId,
     widgetRailPane,
     messages,
@@ -66,52 +55,22 @@ export function ChatThreadView(): JSX.Element {
     handleTranslateForMessage,
     isRecording,
     recordingDurationMs,
-  } = useChatSelectors((s) => ({
-    selectedConversationId: s.selectedConversationId,
-    widgetRailPane: s.widgetRailPane,
-    messages: s.messages,
-    text: s.text,
-    setText: s.setText,
-    error: s.error,
-    chatHeaderMenuOpen: s.chatHeaderMenuOpen,
-    setChatHeaderMenuOpen: s.setChatHeaderMenuOpen,
-    messageActionsMenuId: s.messageActionsMenuId,
-    setMessageActionsMenuId: s.setMessageActionsMenuId,
-    messageSpeechUi: s.messageSpeechUi,
-    patchMessageSpeechUi: s.patchMessageSpeechUi,
-    widgetBackToInbox: s.widgetBackToInbox,
-    openEditGroupModal: s.openEditGroupModal,
-    handleDeleteSelectedConversation: s.handleDeleteSelectedConversation,
-    deletingConversation: s.deletingConversation,
-    handleSendText: s.handleSendText,
-    handleReact: s.handleReact,
-    handleMarkRead: s.handleMarkRead,
-    handleDelete: s.handleDelete,
-    handleTranscribeVoiceMessage: s.handleTranscribeVoiceMessage,
-    handleTranslateForMessage: s.handleTranslateForMessage,
-    isRecording: s.isRecording,
-    recordingDurationMs: s.recordingDurationMs,
-  }));
-
-  const selectedConversation = useSelectedConversation();
-  const selectedDirectPeerId = useSelectedDirectPeerId();
-  const getConversationTitle = useConversationTitleGetter();
-  const getConversationSubtitle = useConversationSubtitleGetter();
-  const usersById = useUsersById();
-
-  const {
+    selectedConversation,
+    selectedDirectPeerId,
+    getConversationTitle,
+    getConversationSubtitle,
+    isPeerOnline,
     messageScrollerRef,
     chatHeaderMenuRef,
     startRecording,
     finishRecording,
-    cancelRecording
-  } = useChatRuntimeContext();
+    cancelRecording,
+    usersById,
+  } = useChatThreadState();
 
   if (!user) {
     return <div className="blank-chat">Sign in to chat.</div>;
   }
-
-  const isPeerOnline = (userId: string): boolean => usersById.get(userId)?.isOnline ?? false;
 
   const getSenderLabel = (senderId: string): string => {
     if (senderId === user.id) {

@@ -1,5 +1,4 @@
-
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   isGlobalConversation,
   isGroupConversation,
@@ -13,6 +12,12 @@ import { useChatStore } from '../store/useChatStore';
 export function useUsersById(): Map<string, TenantUser> {
   const tenantUsers = useChatStore((s) => s.tenantUsers);
   return useMemo(() => new Map(tenantUsers.map((item) => [item.id, item])), [tenantUsers]);
+}
+
+/** Stable `(userId) => isOnline` from tenant directory (sidebar + thread). */
+export function useTenantUserOnlineLookup(): (userId: string) => boolean {
+  const usersById = useUsersById();
+  return useCallback((userId: string) => usersById.get(userId)?.isOnline ?? false, [usersById]);
 }
 
 export function useSelectedConversation(): Conversation | null {

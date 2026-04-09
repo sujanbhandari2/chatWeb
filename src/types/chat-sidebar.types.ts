@@ -38,3 +38,45 @@ export type ChatSidebarState = {
   navigateToPeople: () => void;
   navigateToNewGroup: () => void;
 };
+
+export type ChatSidebarPeoplePanelProps = Pick<
+  ChatSidebarState,
+  | 'navigateToChats'
+  | 'filteredPeopleDirectory'
+  | 'sortedTenantPeers'
+  | 'peopleSearchQuery'
+  | 'setPeopleSearchQuery'
+  | 'openingDirectUserId'
+  | 'onOpenDirectChat'
+>;
+
+export type ChatSidebarNewGroupPanelProps = Pick<
+  ChatSidebarState,
+  'navigateToChatsFromNewGroup' | 'creatingGroup'
+>;
+
+export type ChatSidebarEditGroupPanelProps = Pick<
+  ChatSidebarState,
+  'navigateToChatsFromEditGroup' | 'editingGroup'
+>;
+
+export type ChatSidebarChatsPanelProps = Pick<
+  ChatSidebarState,
+  | 'filteredConversations'
+  | 'sortedConversations'
+  | 'chatSearchQuery'
+  | 'setChatSearchQuery'
+  | 'selectedConversationId'
+  | 'selectConversation'
+  | 'unreadByConversation'
+  | 'getSingleOtherParticipantId'
+  | 'getConversationTitle'
+  | 'getConversationSubtitle'
+  | 'isPeerOnline'
+  | 'menuOpen'
+  | 'setMenuOpen'
+  | 'overflowMenuRef'
+  | 'navigateToPeople'
+  | 'navigateToNewGroup'
+  | 'features'
+>;

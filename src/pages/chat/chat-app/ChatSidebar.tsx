@@ -1,4 +1,10 @@
 import { WidgetPanelType } from '../../../types/chat';
+import type {
+  ChatSidebarChatsPanelProps,
+  ChatSidebarEditGroupPanelProps,
+  ChatSidebarNewGroupPanelProps,
+  ChatSidebarPeoplePanelProps
+} from '../../../types/chat-sidebar.types';
 import { CreateGroupForm } from './CreateGroupForm';
 import { EditGroupForm } from './EditGroupForm';
 import { ConversationList } from '../../../features/chat-widget/sidebar/ConversationList';
@@ -7,17 +13,15 @@ import { SidebarHeader } from '../../../features/chat-widget/sidebar/SidebarHead
 import { GroupForm } from '../../../features/chat-widget/sidebar/GroupForm';
 import { useChatSidebarState } from './useChatSidebarState';
 
-function PeoplePanel(): JSX.Element {
-  const {
-    navigateToChats,
-    filteredPeopleDirectory,
-    sortedTenantPeers,
-    peopleSearchQuery,
-    setPeopleSearchQuery,
-    openingDirectUserId,
-    onOpenDirectChat,
-  } = useChatSidebarState();
-
+function PeoplePanel({
+  navigateToChats,
+  filteredPeopleDirectory,
+  sortedTenantPeers,
+  peopleSearchQuery,
+  setPeopleSearchQuery,
+  openingDirectUserId,
+  onOpenDirectChat
+}: ChatSidebarPeoplePanelProps): JSX.Element {
   return (
     <>
       <SidebarHeader
@@ -39,9 +43,10 @@ function PeoplePanel(): JSX.Element {
   );
 }
 
-function NewGroupPanel(): JSX.Element {
-  const { navigateToChatsFromNewGroup, creatingGroup } = useChatSidebarState();
-
+function NewGroupPanel({
+  navigateToChatsFromNewGroup,
+  creatingGroup
+}: ChatSidebarNewGroupPanelProps): JSX.Element {
   return (
     <>
       <SidebarHeader
@@ -59,9 +64,10 @@ function NewGroupPanel(): JSX.Element {
   );
 }
 
-function EditGroupPanel(): JSX.Element {
-  const { navigateToChatsFromEditGroup, editingGroup } = useChatSidebarState();
-
+function EditGroupPanel({
+  navigateToChatsFromEditGroup,
+  editingGroup
+}: ChatSidebarEditGroupPanelProps): JSX.Element {
   return (
     <>
       <SidebarHeader
@@ -80,27 +86,25 @@ function EditGroupPanel(): JSX.Element {
   );
 }
 
-function ChatsPanel(): JSX.Element {
-  const {
-    filteredConversations,
-    sortedConversations,
-    chatSearchQuery,
-    setChatSearchQuery,
-    selectedConversationId,
-    selectConversation,
-    unreadByConversation,
-    getSingleOtherParticipantId,
-    getConversationTitle,
-    getConversationSubtitle,
-    isPeerOnline,
-    menuOpen,
-    setMenuOpen,
-    overflowMenuRef,
-    navigateToPeople,
-    navigateToNewGroup,
-    features,
-  } = useChatSidebarState();
-
+function ChatsPanel({
+  filteredConversations,
+  sortedConversations,
+  chatSearchQuery,
+  setChatSearchQuery,
+  selectedConversationId,
+  selectConversation,
+  unreadByConversation,
+  getSingleOtherParticipantId,
+  getConversationTitle,
+  getConversationSubtitle,
+  isPeerOnline,
+  menuOpen,
+  setMenuOpen,
+  overflowMenuRef,
+  navigateToPeople,
+  navigateToNewGroup,
+  features
+}: ChatSidebarChatsPanelProps): JSX.Element {
   return (
     <div className="left-rail-scroll left-rail-scroll--widget-order">
       <ConversationList
@@ -128,23 +132,63 @@ function ChatsPanel(): JSX.Element {
 
 /** Widget left rail: chats list, people directory, create/edit group flows. */
 export function ChatSidebar(): JSX.Element {
-  const { user, currentPanel } = useChatSidebarState();
+  const state = useChatSidebarState();
 
-  if (!user) {
+  if (!state.user) {
     return <></>;
   }
 
-  switch (currentPanel) {
+  switch (state.currentPanel) {
     case WidgetPanelType.PEOPLE:
-      return <PeoplePanel />;
+      return (
+        <PeoplePanel
+          navigateToChats={state.navigateToChats}
+          filteredPeopleDirectory={state.filteredPeopleDirectory}
+          sortedTenantPeers={state.sortedTenantPeers}
+          peopleSearchQuery={state.peopleSearchQuery}
+          setPeopleSearchQuery={state.setPeopleSearchQuery}
+          openingDirectUserId={state.openingDirectUserId}
+          onOpenDirectChat={state.onOpenDirectChat}
+        />
+      );
     case WidgetPanelType.NEW_GROUP:
-      return <NewGroupPanel />;
+      return (
+        <NewGroupPanel
+          navigateToChatsFromNewGroup={state.navigateToChatsFromNewGroup}
+          creatingGroup={state.creatingGroup}
+        />
+      );
     case WidgetPanelType.EDIT_GROUP:
-      return <EditGroupPanel />;
+      return (
+        <EditGroupPanel
+          navigateToChatsFromEditGroup={state.navigateToChatsFromEditGroup}
+          editingGroup={state.editingGroup}
+        />
+      );
     case WidgetPanelType.CHATS:
-      return <ChatsPanel />;
+      return (
+        <ChatsPanel
+          filteredConversations={state.filteredConversations}
+          sortedConversations={state.sortedConversations}
+          chatSearchQuery={state.chatSearchQuery}
+          setChatSearchQuery={state.setChatSearchQuery}
+          selectedConversationId={state.selectedConversationId}
+          selectConversation={state.selectConversation}
+          unreadByConversation={state.unreadByConversation}
+          getSingleOtherParticipantId={state.getSingleOtherParticipantId}
+          getConversationTitle={state.getConversationTitle}
+          getConversationSubtitle={state.getConversationSubtitle}
+          isPeerOnline={state.isPeerOnline}
+          menuOpen={state.menuOpen}
+          setMenuOpen={state.setMenuOpen}
+          overflowMenuRef={state.overflowMenuRef}
+          navigateToPeople={state.navigateToPeople}
+          navigateToNewGroup={state.navigateToNewGroup}
+          features={state.features}
+        />
+      );
     default: {
-      const _exhaustive: never = currentPanel;
+      const _exhaustive: never = state.currentPanel;
       return _exhaustive;
     }
   }

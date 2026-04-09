@@ -1,48 +1,27 @@
 import { userDisplayName } from '../../../utils/chat.utils';
-import { useChatSelectors } from '../../../hooks/useChatSelectors';
-import { useFilteredGroupPickerPeers, useSortedTenantPeers, useUsersById } from '../../../hooks/useChatDerived';
-import { useChatRuntimeContext } from '../../../hooks/ChatRuntimeContext';
-import { WidgetPanelType } from '../../../types/chat';
+import { useCreateGroupFormState } from '../../../hooks/useCreateGroupFormState';
 
 export function CreateGroupForm(): JSX.Element {
-  const { newGroupFormId } = useChatRuntimeContext();
   const {
+    newGroupFormId,
     groupTitle,
     setGroupTitle,
     groupSelectedUserIds,
     groupPickerSearch,
     setGroupPickerSearch,
     groupModalError,
-    setGroupModalError,
     creatingGroup,
     handleCreateGroup,
-    setWidgetRailPane,
     addUserToGroupSelection,
     removeUserFromGroupSelection,
-  } = useChatSelectors((s) => ({
-    groupTitle: s.groupTitle,
-    setGroupTitle: s.setGroupTitle,
-    groupSelectedUserIds: s.groupSelectedUserIds,
-    groupPickerSearch: s.groupPickerSearch,
-    setGroupPickerSearch: s.setGroupPickerSearch,
-    groupModalError: s.groupModalError,
-    setGroupModalError: s.setGroupModalError,
-    creatingGroup: s.creatingGroup,
-    handleCreateGroup: s.handleCreateGroup,
-    setWidgetRailPane: s.setWidgetRailPane,
-    addUserToGroupSelection: s.addUserToGroupSelection,
-    removeUserFromGroupSelection: s.removeUserFromGroupSelection,
-  }));
-  const sortedTenantPeers = useSortedTenantPeers();
-  const filteredGroupPickerPeers = useFilteredGroupPickerPeers();
-  const usersById = useUsersById();
+    sortedTenantPeers,
+    filteredGroupPickerPeers,
+    usersById,
+    exitNewGroupRailToChats,
+  } = useCreateGroupFormState();
 
   const onCancel = (): void => {
-    if (creatingGroup) {
-      return;
-    }
-    setWidgetRailPane(WidgetPanelType.CHATS);
-    setGroupModalError('');
+    exitNewGroupRailToChats();
   };
 
   const formFields = (

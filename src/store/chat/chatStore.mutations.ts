@@ -162,6 +162,22 @@ export function buildChatMutations(set: SetChat, get: () => ChatStore): Partial<
       get().setWidgetRailPane(WidgetPanelType.NEW_GROUP);
     },
 
+    exitNewGroupRailToChats: () => {
+      if (get().creatingGroup) {
+        return;
+      }
+      get().setWidgetRailPane(WidgetPanelType.CHATS);
+      get().setGroupModalError('');
+    },
+
+    exitEditGroupRailToChats: () => {
+      if (get().editGroupSaving) {
+        return;
+      }
+      get().setWidgetRailPane(WidgetPanelType.CHATS);
+      get().setEditGroupError('');
+    },
+
     addUserToGroupSelection: (userId) =>
       get().setGroupSelectedUserIds((previous) => (previous.includes(userId) ? previous : [...previous, userId])),
 

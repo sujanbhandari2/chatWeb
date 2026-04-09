@@ -1,6 +1,7 @@
 import { defaultWidgetInitConfig, type WidgetInitConfig } from '../schemas/widget.schemas';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
+import { selectWidgetChrome } from '../store/chat/chat-selectors';
 import { useChatRuntime } from './useChatRuntime';
 import { getPanelHeaderLabel, isChatOverlayVisible } from '../helpers/chat.helper';
 import type { WidgetConfigState } from '../types/widget-app.types';
@@ -16,10 +17,7 @@ export function useWidgetConfig(optionalConfig?: WidgetInitConfig): WidgetConfig
   const user = useAuthStore((s) => s.user);
   const sessionHydrated = useAuthStore((s) => s.sessionHydrated);
 
-  const { widgetRailPane, selectedConversationId } = useChatSelectors((s) => ({
-    widgetRailPane: s.widgetRailPane,
-    selectedConversationId: s.selectedConversationId,
-  }));
+  const { widgetRailPane, selectedConversationId } = useChatSelectors(selectWidgetChrome);
 
   const isMissingTenant = Boolean(!config.backend?.tenantId?.trim());
   const headerLabel = getPanelHeaderLabel(widgetRailPane);
