@@ -1,9 +1,8 @@
-import type { LoginInput, RegisterInput } from '../schemas/auth';
+import type { CreateInTenantInput, LoginInput } from '../schemas/auth';
 import type {
   Conversation,
   CreateAccountResponse,
   HealthResponse,
-  Message,
   MessagesPage,
   TenantUser,
   TranslateResponse,
@@ -98,7 +97,7 @@ export async function getHealth(): Promise<HealthResponse> {
 }
 
 /** POST /api/auth/create */
-export async function createAccount(input: RegisterInput): Promise<CreateAccountResponse> {
+export async function createAccount(input: CreateInTenantInput): Promise<CreateAccountResponse> {
   return requestJson<CreateAccountResponse>('/auth/create', {
     method: 'POST',
     body: JSON.stringify(input)
@@ -109,38 +108,19 @@ export async function createAccount(input: RegisterInput): Promise<CreateAccount
 export async function login(input: LoginInput): Promise<CreateAccountResponse> {
   return requestJson<CreateAccountResponse>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify(input)
+    body: JSON.stringify({
+      email: input.email,
+      tenantId: input.tenantId
+    })
   });
 }
 
-/** POST /api/conversations */
+/** POST /api/conversations — creator is always included; pass other participant ids only */
 export async function createConversation(token: string, participantIds: string[]): Promise<Conversation> {
   return requestJson<Conversation>('/conversations', {
     method: 'POST',
     token,
     body: JSON.stringify({ participantIds })
-  });
-}
-
-/** POST /api/conversations/direct */
-export async function createDirectConversation(token: string, userId: string): Promise<Conversation> {
-  return requestJson<Conversation>('/conversations/direct', {
-    method: 'POST',
-    token,
-    body: JSON.stringify({ userId })
-  });
-}
-
-/** POST /api/conversations/group */
-export async function createGroupConversation(
-  token: string,
-  title: string,
-  participantIds: string[]
-): Promise<Conversation> {
-  return requestJson<Conversation>('/conversations/group', {
-    method: 'POST',
-    token,
-    body: JSON.stringify({ title, participantIds })
   });
 }
 
@@ -153,58 +133,12 @@ export async function getConversations(token: string): Promise<Conversation[]> {
   return response.data;
 }
 
-/** DELETE /api/conversations/:id — remove conversation for current user / delete group (server-defined). */
-export async function deleteConversation(token: string, conversationId: string): Promise<void> {
-  await requestJson<void>(`/conversations/${conversationId}`, {
-    method: 'DELETE',
-    token
-  });
-}
-
-/** PATCH /api/conversations/:id — update metadata (e.g. group title). */
-export async function updateConversation(
-  token: string,
-  conversationId: string,
-  body: { title: string }
-): Promise<Conversation> {
-  return requestJson<Conversation>(`/conversations/${conversationId}`, {
-    method: 'PATCH',
-    token,
-    body: JSON.stringify(body)
-  });
-}
-
-/** POST /api/conversations/:id/participants — add users to a group. */
-export async function addConversationParticipants(
-  token: string,
-  conversationId: string,
-  userIds: string[]
-): Promise<Conversation> {
-  return requestJson<Conversation>(`/conversations/${conversationId}/participants`, {
-    method: 'POST',
-    token,
-    body: JSON.stringify({ userIds })
-  });
-}
-
-/** DELETE /api/conversations/:id/participants/:userId — remove a member (or leave). */
-export async function removeConversationParticipant(
-  token: string,
-  conversationId: string,
-  userId: string
-): Promise<void> {
-  await requestJson<void>(`/conversations/${conversationId}/participants/${userId}`, {
-    method: 'DELETE',
-    token
-  });
-}
-
 /** GET /api/conversations/:id/messages */
 export async function getMessages(
   token: string,
   conversationId: string,
   page = 1,
-  pageSize = 50
+  pageSize = 20
 ): Promise<MessagesPage> {
   const query = new URLSearchParams({
     page: String(page),
@@ -216,33 +150,9 @@ export async function getMessages(
   });
 }
 
-/**
- * POST /api/conversations/:conversationId/messages/:messageId/reactions
- * Persists a reaction when the API supports it. Returns the updated message when possible.
- */
-export async function addMessageReaction(
-  token: string,
-  conversationId: string,
-  messageId: string,
-  emoji: string
-): Promise<Message> {
-  const raw = await requestJson<Message | { data: Message }>(
-    `/conversations/${conversationId}/messages/${messageId}/reactions`,
-    {
-      method: 'POST',
-      token,
-      body: JSON.stringify({ emoji, reactionType: emoji })
-    }
-  );
-  if (raw && typeof raw === 'object' && 'data' in raw && raw.data && typeof (raw as { data: Message }).data.id === 'string') {
-    return (raw as { data: Message }).data;
-  }
-  return raw as Message;
-}
-
 /** GET /api/users */
 export async function getUsers(token: string): Promise<TenantUser[]> {
-  const response = await requestJson<{ data: TenantUser[] }>('/users', {
+  const response = await requestJson<{ data: TenantUser[] }>('/users/', {
     method: 'GET',
     token
   });
@@ -270,20 +180,17 @@ export async function uploadFile(token: string, file: File): Promise<UploadFileR
   return response.json() as Promise<UploadFileResponse>;
 }
 
-/** POST /api/speech/transcribe */
+/** POST /api/speech/transcribe — multipart field `file` (≤25 MB); optional ISO-639-1 `language` */
 export async function transcribeSpeech(
   token: string,
   audio: File | Blob,
-  options?: { language?: string; processAgain?: boolean; filename?: string }
+  options?: { language?: string; filename?: string }
 ): Promise<TranscribeResponse> {
   const formData = new FormData();
-  const name = options?.filename ?? (audio instanceof File ? audio.name : 'audio.webm');
-  formData.append('audio', audio, name);
+  const name = options?.filename ?? (audio instanceof File ? audio.name : 'recording.webm');
+  formData.append('file', audio, name);
   if (options?.language) {
     formData.append('language', options.language);
-  }
-  if (options?.processAgain !== undefined) {
-    formData.append('processAgain', options.processAgain ? 'true' : 'false');
   }
 
   const response = await fetch(`${API_BASE}/speech/transcribe`, {
@@ -302,15 +209,39 @@ export async function transcribeSpeech(
   return response.json() as Promise<TranscribeResponse>;
 }
 
-/** POST /api/speech/translate */
+/** POST /api/speech/translate — JSON: text (1–50k), targetLanguage (2–80 chars, e.g. Spanish, ja) */
 export async function translateText(
   token: string,
-  input: { text: string; targetLanguage: string; sourceLanguage?: string }
+  input: { text: string; targetLanguage: string }
 ): Promise<TranslateResponse> {
   return requestJson<TranslateResponse>('/speech/translate', {
     method: 'POST',
     token,
-    body: JSON.stringify(input)
+    body: JSON.stringify({
+      text: input.text,
+      targetLanguage: input.targetLanguage
+    })
+  });
+}
+
+/** POST /api/users/push-token */
+export async function registerPushToken(
+  authToken: string,
+  payload: { token: string; platform: 'IOS' | 'ANDROID' | 'WEB'; deviceId?: string }
+): Promise<{ ok: boolean }> {
+  return requestJson<{ ok: boolean }>('/users/push-token', {
+    method: 'POST',
+    token: authToken,
+    body: JSON.stringify(payload)
+  });
+}
+
+/** DELETE /api/users/push-token */
+export async function deletePushToken(authToken: string, deviceToken: string): Promise<{ ok: boolean }> {
+  return requestJson<{ ok: boolean }>('/users/push-token', {
+    method: 'DELETE',
+    token: authToken,
+    body: JSON.stringify({ token: deviceToken })
   });
 }
 

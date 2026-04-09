@@ -1,23 +1,17 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { GrLanguage } from 'react-icons/gr';
 import { io, Socket } from 'socket.io-client';
 import {
-  addConversationParticipants,
-  addMessageReaction,
-  ApiError,
   createAccount,
-  createDirectConversation,
-  createGroupConversation,
-  deleteConversation,
+  createConversation,
   getConversations,
   getMessages,
   getUsers,
   login,
-  removeConversationParticipant,
   serverOrigin,
-  updateConversation,
-  uploadFile,
   transcribeSpeech,
-  translateText
+  translateText,
+  uploadFile
 } from './api/client';
 import { formatZodError, loginSchema, registerSchema } from './schemas/auth';
 import {
@@ -47,32 +41,14 @@ type DeliveryStatus = 'sent' | 'delivered' | 'seen';
 /** Shown on hover (desktop); touch users use the ⋮ menu copy of these. */
 const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
 
-const TRANSLATE_TARGET_LANGS: Array<{ code: string; label: string }> = [
-  { code: 'en', label: 'English' },
-  { code: 'es', label: 'Spanish' },
-  { code: 'fr', label: 'French' },
-  { code: 'de', label: 'German' },
-  { code: 'hi', label: 'Hindi' },
-  { code: 'ar', label: 'Arabic' },
-  { code: 'zh', label: 'Chinese' },
-  { code: 'ja', label: 'Japanese' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'it', label: 'Italian' },
-  { code: 'nl', label: 'Dutch' },
-  { code: 'ko', label: 'Korean' }
-];
-
-const translateLangLabel = (code: string): string =>
-  TRANSLATE_TARGET_LANGS.find((lang) => lang.code === code)?.label ?? code.toUpperCase();
+/** Default `targetLanguage` for POST /api/speech/translate (ISO-639-1). */
+const TRANSLATE_TARGET_LANGUAGE = 'en';
 
 type MessageSpeechUiState = {
   transcript?: string;
   translated?: string;
-  targetLang?: string;
   loading?: 'transcribe' | 'translate';
   error?: string;
-  /** Messenger-style: language row hidden until user taps “See translation” */
-  translateToolsOpen?: boolean;
 };
 
 const toAbsoluteMediaUrl = (url: string): string => {
@@ -83,10 +59,16 @@ const toAbsoluteMediaUrl = (url: string): string => {
   return `${BACKEND_ORIGIN}${url}`;
 };
 
-type UserLabel = { name: string | null; email: string };
+type UserLabel = { name: string | null; email?: string | null; username?: string | null };
 
 const userDisplayName = (user: UserLabel): string => {
-  const raw = (user.name?.trim() || user.email.split('@')[0] || user.email).replace(/[_-]/g, ' ');
+  const raw = (
+    user.name?.trim() ||
+    user.username?.trim() ||
+    user.email?.split('@')[0] ||
+    user.email ||
+    'User'
+  ).replace(/[_-]/g, ' ');
   return raw
     .split(/\s+/g)
     .filter(Boolean)
@@ -97,7 +79,8 @@ const userDisplayName = (user: UserLabel): string => {
 const userInitials = (user: UserLabel): string => {
   const label = userDisplayName(user);
   const chunks = label.split(' ').filter(Boolean);
-  const a = (chunks[0]?.[0] ?? user.email[0] ?? 'U').toUpperCase();
+  const seed = user.email ?? user.username ?? label;
+  const a = (chunks[0]?.[0] ?? seed[0] ?? 'U').toUpperCase();
   const b = (chunks[1]?.[0] ?? chunks[0]?.[1] ?? '').toUpperCase();
   return a + b;
 };
@@ -115,6 +98,7 @@ function normalizeMessage(message: Message): Message {
         r.user ??
         ({
           id: r.userId,
+          username: undefined,
           name: null,
           email: '…',
           avatarUrl: null,
@@ -147,9 +131,20 @@ function summarizeReactions(
   });
 }
 
-const isGlobalConversation = (conversation: Conversation): boolean => conversation.type === 'GLOBAL';
+const isGlobalConversation = (conversation: Conversation): boolean =>
+  conversation.isGlobal === true || conversation.type === 'GLOBAL';
 
-const isGroupConversation = (conversation: Conversation): boolean => conversation.type === 'GROUP';
+/** Multi-participant (non-global) chat — API has no separate “group” type */
+const isGroupConversation = (conversation: Conversation, currentUserId: string | undefined): boolean => {
+  if (!currentUserId || isGlobalConversation(conversation)) {
+    return false;
+  }
+  if (conversation.type === 'GROUP') {
+    return true;
+  }
+  const others = conversation.participants.filter((p) => p.userId !== currentUserId);
+  return others.length > 1;
+};
 
 function pickUserId(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') {
@@ -252,6 +247,18 @@ function IconCheckSend(): JSX.Element {
   );
 }
 
+/** Transcribe / captions (toolbar) */
+function IconCaptions(): JSX.Element {
+  return (
+    <svg className="message-toolbar-icon" viewBox="0 0 24 24" width={18} height={18} aria-hidden>
+      <path
+        fill="currentColor"
+        d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6v-2zm0 4h7v2H6v-2zm9-4h1v2h-4v-2h3zm3 4h-5v2h5v-2z"
+      />
+    </svg>
+  );
+}
+
 function formatRecordingDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -292,23 +299,11 @@ export default function App() {
   const [railMenuOpen, setRailMenuOpen] = useState<boolean>(false);
   const railMenuRef = useRef<HTMLDivElement | null>(null);
   const [groupModalOpen, setGroupModalOpen] = useState<boolean>(false);
-  const [groupTitle, setGroupTitle] = useState<string>('');
   const [groupSelectedUserIds, setGroupSelectedUserIds] = useState<string[]>([]);
   const [groupPickerSearch, setGroupPickerSearch] = useState<string>('');
   const [creatingGroup, setCreatingGroup] = useState<boolean>(false);
   const [groupModalError, setGroupModalError] = useState<string>('');
-  const [chatHeaderMenuOpen, setChatHeaderMenuOpen] = useState<boolean>(false);
-  const chatHeaderMenuRef = useRef<HTMLDivElement | null>(null);
   const [messageActionsMenuId, setMessageActionsMenuId] = useState<string | null>(null);
-  const [editGroupModalOpen, setEditGroupModalOpen] = useState<boolean>(false);
-  const [editGroupTitle, setEditGroupTitle] = useState<string>('');
-  const [editGroupParticipantIds, setEditGroupParticipantIds] = useState<string[]>([]);
-  const editGroupInitialIdsRef = useRef<string[]>([]);
-  const [editGroupConversationId, setEditGroupConversationId] = useState<string>('');
-  const [editGroupPickerSearch, setEditGroupPickerSearch] = useState<string>('');
-  const [editGroupSaving, setEditGroupSaving] = useState<boolean>(false);
-  const [editGroupError, setEditGroupError] = useState<string>('');
-  const [deletingConversation, setDeletingConversation] = useState<boolean>(false);
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [socketConnected, setSocketConnected] = useState<boolean>(false);
@@ -473,33 +468,6 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [groupModalOpen]);
 
-  useEffect(() => {
-    if (!chatHeaderMenuOpen) {
-      return;
-    }
-    const onMouseDown = (event: MouseEvent): void => {
-      if (chatHeaderMenuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-      setChatHeaderMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [chatHeaderMenuOpen]);
-
-  useEffect(() => {
-    if (!editGroupModalOpen) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !editGroupSaving) {
-        setEditGroupModalOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editGroupModalOpen, editGroupSaving]);
-
   const authFormDefaults = useMemo(
     () => ({
       tenantId: '',
@@ -520,6 +488,29 @@ export default function App() {
     [conversations, selectedConversationId]
   );
 
+  const headerAvatarUser = useMemo((): UserLabel => {
+    if (!selectedConversation || !user) {
+      return { name: null, email: '?' };
+    }
+    if (isGlobalConversation(selectedConversation)) {
+      return { name: 'All Users', email: 'broadcast' };
+    }
+    const otherParticipant = selectedConversation.participants.find((p) => p.userId !== user.id);
+    const other = otherParticipant?.user;
+    if (other) {
+      return {
+        name: other.name ?? null,
+        username: other.username,
+        email: other.email ?? null
+      };
+    }
+    const u = selectedConversation.participants[0]?.user;
+    if (u) {
+      return { name: u.name ?? null, username: u.username, email: u.email ?? null };
+    }
+    return { name: null, email: '?' };
+  }, [selectedConversation, user]);
+
   const sortedConversations = useMemo(() => {
     return [...conversations].sort((a, b) => {
       const unreadA = (unreadByConversation[a.id] ?? 0) > 0 ? 1 : 0;
@@ -527,8 +518,8 @@ export default function App() {
       if (unreadA !== unreadB) {
         return unreadB - unreadA;
       }
-      const ta = new Date(a.updatedAt).getTime();
-      const tb = new Date(b.updatedAt).getTime();
+      const ta = new Date(a.updatedAt ?? a.createdAt).getTime();
+      const tb = new Date(b.updatedAt ?? b.createdAt).getTime();
       return tb - ta;
     });
   }, [conversations, unreadByConversation]);
@@ -582,10 +573,12 @@ export default function App() {
     return peersWithoutDirectChat.filter((peer) => {
       const name = userDisplayName(peer).toLowerCase();
       const email = peer.email.toLowerCase();
+      const username = (peer.username ?? '').toLowerCase();
       const status = (peer.status ?? '').toLowerCase();
       return (
         name.includes(q) ||
         email.includes(q) ||
+        username.includes(q) ||
         status.includes(q) ||
         peer.id.toLowerCase().includes(q)
       );
@@ -604,27 +597,11 @@ export default function App() {
         return (
           userDisplayName(p).toLowerCase().includes(q) ||
           p.email.toLowerCase().includes(q) ||
+          (p.username ?? '').toLowerCase().includes(q) ||
           (p.status ?? '').toLowerCase().includes(q)
         );
       });
   }, [sortedTenantPeers, groupSelectedUserIds, groupPickerSearch]);
-
-  const filteredEditGroupPickerPeers = useMemo(() => {
-    const memberSet = new Set(editGroupParticipantIds);
-    const q = editGroupPickerSearch.trim().toLowerCase();
-    return sortedTenantPeers
-      .filter((p) => !memberSet.has(p.id))
-      .filter((p) => {
-        if (!q) {
-          return true;
-        }
-        return (
-          userDisplayName(p).toLowerCase().includes(q) ||
-          p.email.toLowerCase().includes(q) ||
-          (p.status ?? '').toLowerCase().includes(q)
-        );
-      });
-  }, [sortedTenantPeers, editGroupParticipantIds, editGroupPickerSearch]);
 
   const isPeerOnline = (userId: string): boolean => usersById.get(userId)?.isOnline ?? false;
 
@@ -635,7 +612,11 @@ export default function App() {
     }
     const fromConv = selectedConversation?.participants.find((p) => p.userId === userId)?.user;
     if (fromConv) {
-      return userDisplayName(fromConv);
+      return userDisplayName({
+        name: fromConv.name ?? null,
+        username: fromConv.username,
+        email: fromConv.email ?? null
+      });
     }
     return userId.slice(0, 8);
   };
@@ -678,7 +659,8 @@ export default function App() {
           return c;
         }
         const nextT = new Date(iso).getTime();
-        const curT = new Date(c.updatedAt).getTime();
+        const curIso = c.updatedAt ?? c.createdAt;
+        const curT = new Date(curIso).getTime();
         if (Number.isNaN(nextT)) {
           return c;
         }
@@ -710,10 +692,12 @@ export default function App() {
     }
 
     if (others.length === 1) {
-      return userDisplayName(others[0].user);
+      const u = others[0].user;
+      return userDisplayName({ name: u.name ?? null, username: u.username, email: u.email ?? null });
     }
 
-    return `${userDisplayName(others[0].user)} + ${others.length - 1}`;
+    const u0 = others[0].user;
+    return `${userDisplayName({ name: u0.name ?? null, username: u0.username, email: u0.email ?? null })} + ${others.length - 1}`;
   };
 
   const getConversationSubtitle = (conversation: Conversation): string => {
@@ -728,7 +712,7 @@ export default function App() {
     }
 
     const others = conversation.participants.filter((item) => item.userId !== user.id);
-    const treatAsGroup = isGroupConversation(conversation) || others.length > 1;
+    const treatAsGroup = isGroupConversation(conversation, user.id);
 
     if (treatAsGroup) {
       return `${n} members · Group`;
@@ -929,6 +913,7 @@ export default function App() {
             reaction.user ??
             ({
               id: reaction.userId,
+              username: undefined,
               name: null,
               email: '…',
               avatarUrl: null,
@@ -1222,8 +1207,8 @@ export default function App() {
         setUser(response.user);
       } else {
         const parsed = loginSchema.safeParse({
-          tenantId: authForm.tenantId.trim(),
-          email: authForm.email.trim()
+          email: authForm.email.trim(),
+          tenantId: authForm.tenantId.trim()
         });
         if (!parsed.success) {
           setError(formatZodError(parsed.error));
@@ -1300,7 +1285,7 @@ export default function App() {
         return;
       }
 
-      const createdConversation = await createDirectConversation(token, target.id);
+      const createdConversation = await createConversation(token, [target.id]);
       await refreshConversations(token);
       await selectConversation(createdConversation.id);
     } catch (err) {
@@ -1312,7 +1297,6 @@ export default function App() {
 
   const openGroupModal = (): void => {
     setGroupModalError('');
-    setGroupTitle('');
     setGroupSelectedUserIds([]);
     setGroupPickerSearch('');
     setGroupModalOpen(true);
@@ -1332,13 +1316,8 @@ export default function App() {
       return;
     }
 
-    const title = groupTitle.trim();
-    if (title.length < 1 || title.length > 120) {
-      setGroupModalError('Group name must be 1–120 characters.');
-      return;
-    }
     if (groupSelectedUserIds.length < 2) {
-      setGroupModalError('Add at least two other people to the group.');
+      setGroupModalError('Add at least two other people. You are added automatically.');
       return;
     }
 
@@ -1346,10 +1325,9 @@ export default function App() {
     setGroupModalError('');
 
     try {
-      const participantIds = [...new Set([user.id, ...groupSelectedUserIds])];
-      const created = await createGroupConversation(token, title, participantIds);
+      const participantIds = [...new Set(groupSelectedUserIds)];
+      const created = await createConversation(token, participantIds);
       setGroupModalOpen(false);
-      setGroupTitle('');
       setGroupSelectedUserIds([]);
       setGroupPickerSearch('');
       await refreshConversations(token);
@@ -1358,148 +1336,6 @@ export default function App() {
       setGroupModalError(err instanceof Error ? err.message : 'Could not create group');
     } finally {
       setCreatingGroup(false);
-    }
-  };
-
-  const openEditGroupModal = (): void => {
-    if (!selectedConversation || !isGroupConversation(selectedConversation)) {
-      return;
-    }
-    setEditGroupError('');
-    setEditGroupConversationId(selectedConversation.id);
-    setEditGroupTitle(selectedConversation.title?.trim() ?? '');
-    const ids = selectedConversation.participants.map((p) => p.userId);
-    setEditGroupParticipantIds([...ids]);
-    editGroupInitialIdsRef.current = [...ids];
-    setEditGroupPickerSearch('');
-    setEditGroupModalOpen(true);
-    setChatHeaderMenuOpen(false);
-  };
-
-  const addEditGroupMember = (userId: string): void => {
-    setEditGroupParticipantIds((previous) => (previous.includes(userId) ? previous : [...previous, userId]));
-  };
-
-  const removeEditGroupMember = (userId: string): void => {
-    if (userId === user?.id) {
-      return;
-    }
-    setEditGroupParticipantIds((previous) => {
-      if (previous.length <= 2) {
-        return previous;
-      }
-      return previous.filter((id) => id !== userId);
-    });
-  };
-
-  const handleSaveEditGroup = async (event: FormEvent): Promise<void> => {
-    event.preventDefault();
-    if (!token || !user) {
-      return;
-    }
-    const convId = editGroupConversationId;
-    const title = editGroupTitle.trim();
-    if (title.length < 1 || title.length > 120) {
-      setEditGroupError('Group name must be 1–120 characters.');
-      return;
-    }
-    const initialIds = editGroupInitialIdsRef.current;
-    const initial = new Set(initialIds);
-    const current = new Set(editGroupParticipantIds);
-    const removedSelf = initial.has(user.id) && !current.has(user.id);
-
-    if (!removedSelf && editGroupParticipantIds.length < 2) {
-      setEditGroupError('A group needs at least two members.');
-      return;
-    }
-
-    setEditGroupSaving(true);
-    setEditGroupError('');
-
-    try {
-      await updateConversation(token, convId, { title });
-
-      const added = [...current].filter((id) => !initial.has(id));
-      const removed = [...initial].filter((id) => !current.has(id));
-      const removedOthers = removed.filter((id) => id !== user.id);
-
-      if (added.length > 0) {
-        await addConversationParticipants(token, convId, added);
-      }
-      for (const uid of removedOthers) {
-        await removeConversationParticipant(token, convId, uid);
-      }
-      if (removedSelf) {
-        await removeConversationParticipant(token, convId, user.id);
-      }
-
-      setEditGroupModalOpen(false);
-      await refreshConversations(token);
-      if (removedSelf) {
-        setSelectedConversationId('');
-        setMessages([]);
-      } else {
-        await selectConversation(convId);
-      }
-    } catch (err) {
-      setEditGroupError(err instanceof Error ? err.message : 'Failed to update group');
-    } finally {
-      setEditGroupSaving(false);
-    }
-  };
-
-  const handleLeaveGroup = async (): Promise<void> => {
-    if (!token || !user) {
-      return;
-    }
-    const convId = editGroupConversationId;
-    if (!convId) {
-      return;
-    }
-    if (!window.confirm('Leave this group? You will need a new invite to rejoin.')) {
-      return;
-    }
-    setEditGroupSaving(true);
-    setEditGroupError('');
-    try {
-      await removeConversationParticipant(token, convId, user.id);
-      setEditGroupModalOpen(false);
-      await refreshConversations(token);
-      setSelectedConversationId('');
-      setMessages([]);
-    } catch (err) {
-      setEditGroupError(err instanceof Error ? err.message : 'Could not leave group');
-    } finally {
-      setEditGroupSaving(false);
-    }
-  };
-
-  const handleDeleteSelectedConversation = async (): Promise<void> => {
-    if (!token || !selectedConversation) {
-      return;
-    }
-    if (isGlobalConversation(selectedConversation)) {
-      window.alert('This channel cannot be deleted here.');
-      setChatHeaderMenuOpen(false);
-      return;
-    }
-    const label = getConversationTitle(selectedConversation);
-    if (!window.confirm(`Delete “${label}”? This removes the chat for you.`)) {
-      return;
-    }
-    setDeletingConversation(true);
-    setChatHeaderMenuOpen(false);
-    setError('');
-    try {
-      const id = selectedConversation.id;
-      await deleteConversation(token, id);
-      await refreshConversations(token);
-      setSelectedConversationId('');
-      setMessages([]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete conversation');
-    } finally {
-      setDeletingConversation(false);
     }
   };
 
@@ -1541,131 +1377,6 @@ export default function App() {
     }
   };
 
-  const revertOptimisticReaction = (messageId: string, optimisticId: string): void => {
-    setMessages((previous) =>
-      previous.map((m) => {
-        if (m.id !== messageId) {
-          return m;
-        }
-        const list = (m.reactions ?? []).filter((r) => r.id !== optimisticId);
-        return { ...m, reactions: list };
-      })
-    );
-  };
-
-  /** Persists via REST when the server exposes it; otherwise uses the realtime socket (server should still store in DB). */
-  const handleReact = (messageId: string, emoji: string): void => {
-    if (!user || !selectedConversationId) {
-      return;
-    }
-
-    setError('');
-    setMessageActionsMenuId(null);
-    const conversationId = selectedConversationId;
-    const optimisticId = `optimistic:${messageId}:${user.id}:${emoji}`;
-    const optimisticReaction: MessageReaction = {
-      id: optimisticId,
-      messageId,
-      userId: user.id,
-      emoji,
-      createdAt: new Date().toISOString(),
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatarUrl: null,
-        status: user.status
-      }
-    };
-
-    setMessages((previous) =>
-      previous.map((m) => {
-        if (m.id !== messageId) {
-          return m;
-        }
-        const list = m.reactions ?? [];
-        const filtered = list.filter((r) => r.userId !== user.id);
-        return { ...m, reactions: [...filtered, optimisticReaction] };
-      })
-    );
-
-    void (async (): Promise<void> => {
-      if (token) {
-        try {
-          const updated = await addMessageReaction(token, conversationId, messageId, emoji);
-          if (updated && typeof updated === 'object' && 'id' in updated && updated.id === messageId) {
-            setMessages((previous) =>
-              previous.map((m) => (m.id === messageId ? normalizeMessage(updated) : m))
-            );
-            return;
-          }
-        } catch (err) {
-          const skipSocket =
-            err instanceof ApiError && [404, 405, 501].includes(err.status);
-          if (!skipSocket) {
-            revertOptimisticReaction(messageId, optimisticId);
-            setError(err instanceof Error ? err.message : 'Failed to react');
-            return;
-          }
-        }
-      }
-
-      if (!socket?.connected) {
-        revertOptimisticReaction(messageId, optimisticId);
-        setError('Not connected — cannot send reaction');
-        return;
-      }
-
-      socket.emit(
-        'react_to_message',
-        {
-          messageId,
-          conversationId,
-          emoji,
-          reactionType: emoji
-        },
-        (response?: SocketAck<unknown>) => {
-          if (response === undefined) {
-            return;
-          }
-          if (!response.ok) {
-            revertOptimisticReaction(messageId, optimisticId);
-            setError(response.error ?? 'Failed to react');
-            return;
-          }
-          const data = response.data;
-          if (
-            data &&
-            typeof data === 'object' &&
-            'reactions' in data &&
-            'id' in data &&
-            (data as Message).id === messageId
-          ) {
-            setMessages((previous) =>
-              previous.map((m) => (m.id === messageId ? normalizeMessage(data as Message) : m))
-            );
-          }
-        }
-      );
-    })();
-  };
-
-  const handleDelete = async (messageId: string): Promise<void> => {
-    try {
-      await emitWithAck('delete_message', { messageId });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete message');
-    }
-  };
-
-  const handleMarkRead = async (messageId: string): Promise<void> => {
-    try {
-      await emitWithAck('mark_as_read', { messageId });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to mark as read');
-    }
-  };
-
   const handleTranscribeVoiceMessage = async (message: Message): Promise<void> => {
     if (!token) {
       setError('Sign in required');
@@ -1676,14 +1387,14 @@ export default function App() {
     try {
       const url = toAbsoluteMediaUrl(message.content);
       const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+        headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) {
         throw new Error('Could not load audio');
       }
       const blob = await res.blob();
       const out = await transcribeSpeech(token, blob, { filename: 'message.webm' });
-      const text = out.data?.text ?? '';
+      const text = out.text ?? '';
       patchMessageSpeechUi(id, { loading: undefined, transcript: text });
     } catch (err) {
       patchMessageSpeechUi(id, {
@@ -1712,13 +1423,110 @@ export default function App() {
         text: sourceText,
         targetLanguage
       });
-      const translated = out.data?.translatedText ?? '';
+      const translated = out.translatedText ?? '';
       patchMessageSpeechUi(id, { loading: undefined, translated });
     } catch (err) {
       patchMessageSpeechUi(id, {
         loading: undefined,
         error: err instanceof Error ? err.message : 'Translation failed'
       });
+    }
+  };
+
+  const revertOptimisticReaction = (messageId: string, optimisticId: string): void => {
+    setMessages((previous) =>
+      previous.map((m) => {
+        if (m.id !== messageId) {
+          return m;
+        }
+        const list = (m.reactions ?? []).filter((r) => r.id !== optimisticId);
+        return { ...m, reactions: list };
+      })
+    );
+  };
+
+  /** Socket.IO `react_to_message` — payload per API: `{ messageId, reactionType }` */
+  const handleReact = (messageId: string, emoji: string): void => {
+    if (!user) {
+      return;
+    }
+
+    if (!socket?.connected) {
+      setError('Not connected — cannot send reaction');
+      return;
+    }
+
+    setError('');
+    setMessageActionsMenuId(null);
+    const optimisticId = `optimistic:${messageId}:${user.id}:${emoji}`;
+    const optimisticReaction: MessageReaction = {
+      id: optimisticId,
+      messageId,
+      userId: user.id,
+      emoji,
+      createdAt: new Date().toISOString(),
+      user: {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        avatarUrl: null,
+        status: user.status
+      }
+    };
+
+    setMessages((previous) =>
+      previous.map((m) => {
+        if (m.id !== messageId) {
+          return m;
+        }
+        const list = m.reactions ?? [];
+        const filtered = list.filter((r) => r.userId !== user.id);
+        return { ...m, reactions: [...filtered, optimisticReaction] };
+      })
+    );
+
+    socket.emit(
+      'react_to_message',
+      { messageId, reactionType: emoji },
+      (response?: SocketAck<unknown>) => {
+        if (response === undefined) {
+          return;
+        }
+        if (!response.ok) {
+          revertOptimisticReaction(messageId, optimisticId);
+          setError(response.error ?? 'Failed to react');
+          return;
+        }
+        const data = response.data;
+        if (
+          data &&
+          typeof data === 'object' &&
+          'reactions' in data &&
+          'id' in data &&
+          (data as Message).id === messageId
+        ) {
+          setMessages((previous) =>
+            previous.map((m) => (m.id === messageId ? normalizeMessage(data as Message) : m))
+          );
+        }
+      }
+    );
+  };
+
+  const handleDelete = async (messageId: string): Promise<void> => {
+    try {
+      await emitWithAck('delete_message', { messageId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete message');
+    }
+  };
+
+  const handleMarkRead = async (messageId: string): Promise<void> => {
+    try {
+      await emitWithAck('mark_as_read', { messageId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to mark as read');
     }
   };
 
@@ -1810,8 +1618,8 @@ export default function App() {
         <div className="auth-card">
           <h1>Healthcare Messenger</h1>
           <p className="auth-subtitle">
-            Register uses <code>tenantId</code>, name, and email. Login uses a UUID <code>tenantId</code> and email,
-            matching server Zod schemas.
+            Tenant UUID is required. Register uses <code>POST /api/auth/create</code>; login uses <code>POST /api/auth/login</code>{' '}
+            with the same tenant.
           </p>
 
           <div className="auth-mode-switch">
@@ -1841,8 +1649,9 @@ export default function App() {
             <input
               value={authForm.tenantId}
               onChange={(event) => setAuthForm((prev) => ({ ...prev, tenantId: event.target.value }))}
-              placeholder={authMode === 'login' ? 'Tenant ID (UUID)' : 'Tenant ID'}
+              placeholder="Tenant ID (UUID)"
               required
+              autoComplete="off"
             />
             {authMode === 'register' && (
               <input
@@ -1850,7 +1659,7 @@ export default function App() {
                 onChange={(event) => setAuthForm((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="Name"
                 required
-                maxLength={120}
+                maxLength={200}
               />
             )}
             <input
@@ -1859,6 +1668,7 @@ export default function App() {
               placeholder="Email"
               type="email"
               required
+              autoComplete="email"
             />
             <button type="submit" disabled={isLoading}>
               {isLoading
@@ -1991,11 +1801,30 @@ export default function App() {
             {sortedConversations.map((conversation) => {
             const unreadCount = unreadByConversation[conversation.id] ?? 0;
             const listOtherId = getSingleOtherParticipantId(conversation);
+            const listAvatarUser: UserLabel = (() => {
+              if (!user) {
+                return { name: null, email: '?' };
+              }
+              if (isGlobalConversation(conversation)) {
+                return { name: 'All Users', email: 'broadcast' };
+              }
+              const other = conversation.participants.find((p) => p.userId !== user.id)?.user;
+              if (other) {
+                return {
+                  name: other.name ?? null,
+                  username: other.username,
+                  email: other.email ?? null
+                };
+              }
+              const u = conversation.participants[0]?.user;
+              if (u) {
+                return { name: u.name ?? null, username: u.username, email: u.email ?? null };
+              }
+              return { name: null, email: '?' };
+            })();
             const listAvatar = (
               <div className="avatar-mini">
-                {isGlobalConversation(conversation)
-                  ? 'ALL'
-                  : userInitials(conversation.participants[0]?.user ?? { name: null, email: '?' })}
+                {isGlobalConversation(conversation) ? 'ALL' : userInitials(listAvatarUser)}
               </div>
             );
 
@@ -2048,54 +1877,18 @@ export default function App() {
                 {selectedDirectPeerId !== undefined ? (
                   <AvatarWithPresence online={isPeerOnline(selectedDirectPeerId)}>
                     <div className="avatar-pill">
-                      {isGlobalConversation(selectedConversation)
-                        ? 'ALL'
-                        : userInitials(selectedConversation.participants[0]?.user ?? { name: null, email: '?' })}
+                      {isGlobalConversation(selectedConversation) ? 'ALL' : userInitials(headerAvatarUser)}
                     </div>
                   </AvatarWithPresence>
                 ) : (
                   <div className="avatar-pill">
-                    {isGlobalConversation(selectedConversation)
-                      ? 'ALL'
-                      : userInitials(selectedConversation.participants[0]?.user ?? { name: null, email: '?' })}
+                    {isGlobalConversation(selectedConversation) ? 'ALL' : userInitials(headerAvatarUser)}
                   </div>
                 )}
                 <div className="chat-header-titles">
                   <h3>{getConversationTitle(selectedConversation)}</h3>
                   <p>{getConversationSubtitle(selectedConversation)}</p>
                 </div>
-              </div>
-              <div className="chat-header-menu-wrap" ref={chatHeaderMenuRef}>
-                <button
-                  type="button"
-                  className="chat-header-menu-btn"
-                  aria-expanded={chatHeaderMenuOpen}
-                  aria-haspopup="menu"
-                  aria-label="Chat options"
-                  onClick={() => setChatHeaderMenuOpen((open) => !open)}
-                >
-                  ⋮
-                </button>
-                {chatHeaderMenuOpen && (
-                  <div className="rail-menu-dropdown chat-header-dropdown" role="menu">
-                    {isGroupConversation(selectedConversation) && (
-                      <button type="button" role="menuitem" className="rail-menu-item" onClick={() => openEditGroupModal()}>
-                        Edit group
-                      </button>
-                    )}
-                    {!isGlobalConversation(selectedConversation) && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="rail-menu-item rail-menu-item-danger"
-                        disabled={deletingConversation}
-                        onClick={() => void handleDeleteSelectedConversation()}
-                      >
-                        {deletingConversation ? 'Deleting…' : 'Delete conversation'}
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
             </header>
 
@@ -2105,9 +1898,133 @@ export default function App() {
                 const status = isMine ? getDeliveryStatus(message) : null;
                 const showSenderLabel =
                   selectedConversation != null &&
-                  (isGroupConversation(selectedConversation) || isGlobalConversation(selectedConversation));
+                  (isGroupConversation(selectedConversation, user.id) ||
+                    isGlobalConversation(selectedConversation));
                 const menuOpen = messageActionsMenuId === message.id;
                 const speechUi = messageSpeechUi[message.id];
+                const mtMsg = getMessageType(message);
+                const showTranslateOutside =
+                  !message.deletedAt &&
+                  (mtMsg === 'TEXT' ||
+                    (mtMsg === 'VOICE' &&
+                      !!speechUi &&
+                      !!(speechUi.loading || speechUi.transcript || speechUi.translated || speechUi.error)));
+                const su = speechUi;
+                const showTranslatePanel =
+                  !!su && !!(su.loading || su.transcript || su.translated || su.error);
+
+                const translateInlineBtn =
+                  showTranslateOutside && mtMsg === 'TEXT' ? (
+                    <button
+                      type="button"
+                      className={`message-toolbar-btn message-toolbar-btn--translate message-toolbar-btn--bubble-inline${
+                        su?.translated || su?.loading === 'translate' ? ' message-toolbar-btn--active' : ''
+                      }`}
+                      title="Translate to English"
+                      aria-label="Translate to English"
+                      disabled={su?.loading === 'translate'}
+                      onClick={() =>
+                        void handleTranslateForMessage(message, message.content, TRANSLATE_TARGET_LANGUAGE)
+                      }
+                    >
+                      <GrLanguage className="message-translate-icon" size={12} aria-hidden />
+                    </button>
+                  ) : showTranslateOutside && mtMsg === 'VOICE' && su?.transcript ? (
+                    <button
+                      type="button"
+                      className={`message-toolbar-btn message-toolbar-btn--translate message-toolbar-btn--bubble-inline${
+                        su.translated || su.loading === 'translate' ? ' message-toolbar-btn--active' : ''
+                      }`}
+                      title="Translate to English"
+                      aria-label="Translate to English"
+                      disabled={su.loading === 'translate'}
+                      onClick={() =>
+                        void handleTranslateForMessage(
+                          message,
+                          su.transcript ?? '',
+                          TRANSLATE_TARGET_LANGUAGE
+                        )
+                      }
+                    >
+                      <GrLanguage className="message-translate-icon" size={12} aria-hidden />
+                    </button>
+                  ) : null;
+
+                const translatePanelBody =
+                  showTranslateOutside && showTranslatePanel && su ? (
+                    <div
+                      className={`message-translation-aux message-translation-aux--inline ${
+                        isMine ? 'message-translation-aux--mine' : 'message-translation-aux--theirs'
+                      }`}
+                    >
+                      {mtMsg === 'VOICE' && su.loading === 'transcribe' && (
+                        <p className="message-translation-aux-status">Transcribing…</p>
+                      )}
+                      {mtMsg === 'VOICE' && su.error && !su.transcript && (
+                        <p className="message-msgr-error" role="alert">
+                          {su.error}
+                        </p>
+                      )}
+                      {mtMsg === 'VOICE' && su.transcript && (
+                        <p className="message-msgr-transcript">{su.transcript}</p>
+                      )}
+                      {mtMsg === 'VOICE' && su.transcript && su.translated && (
+                        <>
+                          <div className="message-msgr-divider" aria-hidden />
+                          <p className="message-msgr-meta">Translation · English ({TRANSLATE_TARGET_LANGUAGE})</p>
+                          <p className="message-msgr-translation-body" aria-live="polite">
+                            {su.translated}
+                          </p>
+                          <button
+                            type="button"
+                            className="message-msgr-link"
+                            onClick={() =>
+                              patchMessageSpeechUi(message.id, {
+                                translated: undefined,
+                                error: undefined
+                              })
+                            }
+                          >
+                            See original
+                          </button>
+                        </>
+                      )}
+                      {mtMsg === 'VOICE' && su.error && su.transcript && !su.translated && (
+                        <p className="message-msgr-error" role="alert">
+                          {su.error}
+                        </p>
+                      )}
+
+                      {mtMsg === 'TEXT' && su.loading === 'translate' && !su.translated && (
+                        <p className="message-translation-aux-status">Translating…</p>
+                      )}
+                      {mtMsg === 'TEXT' && su.translated && (
+                        <>
+                          <p className="message-msgr-meta">Translation · English ({TRANSLATE_TARGET_LANGUAGE})</p>
+                          <p className="message-msgr-translation-body" aria-live="polite">
+                            {su.translated}
+                          </p>
+                          <button
+                            type="button"
+                            className="message-msgr-link"
+                            onClick={() =>
+                              patchMessageSpeechUi(message.id, {
+                                translated: undefined,
+                                error: undefined
+                              })
+                            }
+                          >
+                            See original
+                          </button>
+                        </>
+                      )}
+                      {mtMsg === 'TEXT' && su.error && !su.translated && su.loading !== 'translate' && (
+                        <p className="message-msgr-error" role="alert">
+                          {su.error}
+                        </p>
+                      )}
+                    </div>
+                  ) : null;
 
                 return (
                   <div key={message.id} className={`message-row-outer ${isMine ? 'mine' : 'theirs'}`}>
@@ -2115,301 +2032,176 @@ export default function App() {
                       className={`message-cluster ${isMine ? 'mine' : 'theirs'}${menuOpen ? ' message-cluster--menu-open' : ''}`}
                     >
                       <div className="message-content-stack">
-                        {!message.deletedAt && (
-                          <div className="message-hover-actions">
-                            <div className="message-reaction-strip" role="toolbar" aria-label="Quick reactions">
-                              {QUICK_REACTION_EMOJIS.map((emoji) => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  className="message-reaction-strip-btn"
-                                  aria-label={`React ${emoji}`}
-                                  onClick={() => handleReact(message.id, emoji)}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                            <div className="message-more-wrap" data-message-menu-root={message.id}>
-                              <button
-                                type="button"
-                                className="message-more-btn"
-                                aria-expanded={menuOpen}
-                                aria-haspopup="menu"
-                                aria-label="Message actions"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setMessageActionsMenuId((current) => (current === message.id ? null : message.id));
-                                }}
-                              >
-                                ⋮
-                              </button>
-                              {menuOpen && (
-                                <div className="message-actions-dropdown" role="menu">
-                                  <div className="message-actions-reactions" role="none">
-                                    <span className="message-actions-reactions-label">React</span>
-                                    <div className="message-actions-reactions-row" role="group">
-                                      {QUICK_REACTION_EMOJIS.map((emoji) => (
-                                        <button
-                                          key={emoji}
-                                          type="button"
-                                          role="menuitem"
-                                          className="message-actions-emoji-btn"
-                                          aria-label={`React ${emoji}`}
-                                          onClick={() => handleReact(message.id, emoji)}
-                                        >
-                                          {emoji}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  {!isMine && (
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      className="message-actions-item"
-                                      onClick={() => {
-                                        setMessageActionsMenuId(null);
-                                        void handleMarkRead(message.id);
-                                      }}
-                                    >
-                                      Mark as read
-                                    </button>
-                                  )}
-                                  {isMine && (
-                                    <button
-                                      type="button"
-                                      role="menuitem"
-                                      className="message-actions-item message-actions-item-danger"
-                                      onClick={() => {
-                                        setMessageActionsMenuId(null);
-                                        void handleDelete(message.id);
-                                      }}
-                                    >
-                                      Delete
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
+                        {isMine && translatePanelBody && (
+                          <div className="message-translate-slot message-translate-slot--before">
+                            {translatePanelBody}
                           </div>
                         )}
 
-                        <article className={`message-bubble ${isMine ? 'mine' : 'theirs'}`}>
-                          {showSenderLabel && (
-                            <div className="message-label">{getSenderLabel(message.senderId)}</div>
-                          )}
-                          {message.deletedAt ? (
-                            <em className="deleted">Message deleted</em>
-                          ) : getMessageType(message) === 'IMAGE' ? (
-                            <img src={toAbsoluteMediaUrl(message.content)} alt="Uploaded" />
-                          ) : getMessageType(message) === 'VOICE' ? (
-                            <>
-                              <audio controls src={toAbsoluteMediaUrl(message.content)} />
-                              <div className="message-msgr-translation">
-                                {!speechUi?.transcript ? (
-                                  <>
+                        <div className="message-bubble-column">
+                          <div className="message-bubble-wrap">
+                            {!message.deletedAt && (
+                              <div className="message-hover-actions">
+                                <div className="message-reaction-strip" role="toolbar" aria-label="Quick reactions">
+                                  {QUICK_REACTION_EMOJIS.map((emoji) => (
                                     <button
+                                      key={emoji}
                                       type="button"
-                                      className="message-msgr-link"
-                                      disabled={speechUi?.loading === 'transcribe'}
-                                      onClick={() => void handleTranscribeVoiceMessage(message)}
+                                      className="message-reaction-strip-btn"
+                                      aria-label={`React ${emoji}`}
+                                      onClick={() => handleReact(message.id, emoji)}
                                     >
-                                      {speechUi?.loading === 'transcribe' ? 'Transcribing…' : 'Transcribe'}
+                                      {emoji}
                                     </button>
-                                    {speechUi?.error && !speechUi?.transcript ? (
-                                      <p className="message-msgr-error" role="alert">
-                                        {speechUi.error}
-                                      </p>
-                                    ) : null}
-                                  </>
-                                ) : (
-                                  <>
-                                    <p className="message-msgr-transcript">{speechUi.transcript}</p>
-                                    {speechUi.translated ? (
-                                      <>
-                                        <div className="message-msgr-divider" aria-hidden />
-                                        <p className="message-msgr-meta">
-                                          Translation · {translateLangLabel(speechUi.targetLang ?? 'en')}
-                                        </p>
-                                        <p className="message-msgr-translation-body" aria-live="polite">
-                                          {speechUi.translated}
-                                        </p>
-                                        <button
-                                          type="button"
-                                          className="message-msgr-link"
-                                          onClick={() =>
-                                            patchMessageSpeechUi(message.id, {
-                                              translated: undefined,
-                                              error: undefined,
-                                              translateToolsOpen: false
-                                            })
-                                          }
-                                        >
-                                          See original
-                                        </button>
-                                      </>
-                                    ) : speechUi.translateToolsOpen ? (
-                                      <div className="message-msgr-tools">
-                                        <label className="visually-hidden" htmlFor={`trg-voice-${message.id}`}>
-                                          Language
-                                        </label>
-                                        <select
-                                          id={`trg-voice-${message.id}`}
-                                          className="message-msgr-select"
-                                          value={speechUi.targetLang ?? 'en'}
-                                          onChange={(event) =>
-                                            patchMessageSpeechUi(message.id, { targetLang: event.target.value })
-                                          }
-                                        >
-                                          {TRANSLATE_TARGET_LANGS.map((lang) => (
-                                            <option key={lang.code} value={lang.code}>
-                                              {lang.label}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <button
-                                          type="button"
-                                          className="message-msgr-link"
-                                          disabled={speechUi.loading === 'translate'}
-                                          onClick={() =>
-                                            void handleTranslateForMessage(
-                                              message,
-                                              speechUi.transcript ?? '',
-                                              speechUi.targetLang ?? 'en'
-                                            )
-                                          }
-                                        >
-                                          {speechUi.loading === 'translate' ? 'Translating…' : 'See translation'}
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="message-msgr-link"
-                                        onClick={() =>
-                                          patchMessageSpeechUi(message.id, { translateToolsOpen: true })
-                                        }
-                                      >
-                                        See translation
-                                      </button>
-                                    )}
-                                    {speechUi.error && speechUi.transcript && !speechUi.translated ? (
-                                      <p className="message-msgr-error" role="alert">
-                                        {speechUi.error}
-                                      </p>
-                                    ) : null}
-                                  </>
-                                )}
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <p>{message.content}</p>
-                              <div className="message-msgr-translation">
-                                {speechUi?.translated ? (
-                                  <>
-                                    <div className="message-msgr-divider" aria-hidden />
-                                    <p className="message-msgr-meta">
-                                      Translation · {translateLangLabel(speechUi?.targetLang ?? 'en')}
-                                    </p>
-                                    <p className="message-msgr-translation-body" aria-live="polite">
-                                      {speechUi.translated}
-                                    </p>
-                                    <button
-                                      type="button"
-                                      className="message-msgr-link"
-                                      onClick={() =>
-                                        patchMessageSpeechUi(message.id, {
-                                          translated: undefined,
-                                          error: undefined,
-                                          translateToolsOpen: false
-                                        })
-                                      }
-                                    >
-                                      See original
-                                    </button>
-                                  </>
-                                ) : speechUi?.translateToolsOpen ? (
-                                  <>
-                                    <div className="message-msgr-tools">
-                                      <label className="visually-hidden" htmlFor={`trg-text-${message.id}`}>
-                                        Language
-                                      </label>
-                                      <select
-                                        id={`trg-text-${message.id}`}
-                                        className="message-msgr-select"
-                                        value={speechUi?.targetLang ?? 'en'}
-                                        onChange={(event) =>
-                                          patchMessageSpeechUi(message.id, { targetLang: event.target.value })
-                                        }
-                                      >
-                                        {TRANSLATE_TARGET_LANGS.map((lang) => (
-                                          <option key={lang.code} value={lang.code}>
-                                            {lang.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <button
-                                        type="button"
-                                        className="message-msgr-link"
-                                        disabled={speechUi?.loading === 'translate'}
-                                        onClick={() =>
-                                          void handleTranslateForMessage(
-                                            message,
-                                            message.content,
-                                            speechUi?.targetLang ?? 'en'
-                                          )
-                                        }
-                                      >
-                                        {speechUi?.loading === 'translate' ? 'Translating…' : 'See translation'}
-                                      </button>
-                                    </div>
-                                    {speechUi?.error ? (
-                                      <p className="message-msgr-error" role="alert">
-                                        {speechUi.error}
-                                      </p>
-                                    ) : null}
-                                  </>
-                                ) : (
+                                  ))}
+                                </div>
+                                {getMessageType(message) === 'VOICE' && (
                                   <button
                                     type="button"
-                                    className="message-msgr-link"
-                                    onClick={() =>
-                                      patchMessageSpeechUi(message.id, { translateToolsOpen: true })
-                                    }
+                                    className={`message-toolbar-btn${
+                                      speechUi?.loading === 'transcribe' ? ' message-toolbar-btn--busy' : ''
+                                    }`}
+                                    title="Transcribe audio"
+                                    aria-label="Transcribe audio"
+                                    disabled={speechUi?.loading === 'transcribe'}
+                                    onClick={() => void handleTranscribeVoiceMessage(message)}
                                   >
-                                    See translation
+                                    <IconCaptions />
                                   </button>
                                 )}
+                                <div className="message-more-wrap" data-message-menu-root={message.id}>
+                                  <button
+                                    type="button"
+                                    className="message-more-btn"
+                                    aria-expanded={menuOpen}
+                                    aria-haspopup="menu"
+                                    aria-label="Message actions"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setMessageActionsMenuId((current) =>
+                                        current === message.id ? null : message.id
+                                      );
+                                    }}
+                                  >
+                                    ⋮
+                                  </button>
+                                  {menuOpen && (
+                                    <div className="message-actions-dropdown" role="menu">
+                                      <div className="message-actions-reactions" role="none">
+                                        <span className="message-actions-reactions-label">React</span>
+                                        <div className="message-actions-reactions-row" role="group">
+                                          {QUICK_REACTION_EMOJIS.map((emoji) => (
+                                            <button
+                                              key={emoji}
+                                              type="button"
+                                              role="menuitem"
+                                              className="message-actions-emoji-btn"
+                                              aria-label={`React ${emoji}`}
+                                              onClick={() => handleReact(message.id, emoji)}
+                                            >
+                                              {emoji}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      {!isMine && (
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          className="message-actions-item"
+                                          onClick={() => {
+                                            setMessageActionsMenuId(null);
+                                            void handleMarkRead(message.id);
+                                          }}
+                                        >
+                                          Mark as read
+                                        </button>
+                                      )}
+                                      {isMine && (
+                                        <button
+                                          type="button"
+                                          role="menuitem"
+                                          className="message-actions-item message-actions-item-danger"
+                                          onClick={() => {
+                                            setMessageActionsMenuId(null);
+                                            void handleDelete(message.id);
+                                          }}
+                                        >
+                                          Delete
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                            </>
-                          )}
-
-                          <div className="message-info">
-                            <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                            {status && (
-                              <span className={`message-status ${status}`} aria-label={`Message ${status}`}>
-                                {status === 'sent' ? '✓' : '✓✓'}
-                              </span>
                             )}
-                          </div>
-                        </article>
 
-                        {!message.deletedAt && (message.reactions ?? []).length > 0 && (
-                          <div className="message-reactions message-reactions-below" aria-label="Reactions">
-                            {summarizeReactions(message.reactions ?? [], user.id).map((group) => (
-                              <span
-                                key={group.emoji}
-                                className={`message-reaction-chip ${group.mine ? 'message-reaction-chip--mine' : ''}`}
-                                title={group.title}
-                              >
-                                <span className="message-reaction-emoji">{group.emoji}</span>
-                                {group.count > 1 && (
-                                  <span className="message-reaction-count">{group.count}</span>
+                            <article className={`message-bubble ${isMine ? 'mine' : 'theirs'}`}>
+                              {showSenderLabel && (
+                                <div className="message-label">{getSenderLabel(message.senderId)}</div>
+                              )}
+                              {message.deletedAt ? (
+                                <em className="deleted">Message deleted</em>
+                              ) : getMessageType(message) === 'IMAGE' ? (
+                                <img src={toAbsoluteMediaUrl(message.content)} alt="Uploaded" />
+                              ) : getMessageType(message) === 'VOICE' ? (
+                                <audio controls src={toAbsoluteMediaUrl(message.content)} />
+                              ) : (
+                                <p>{message.content}</p>
+                              )}
+
+                              <div className="message-info">
+                                {isMine ? (
+                                  <>
+                                    {translateInlineBtn}
+                                    <span className="message-info-time">
+                                      {new Date(message.createdAt).toLocaleTimeString([], {
+                                        hour: 'numeric',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                    {status && (
+                                      <span className={`message-status ${status}`} aria-label={`Message ${status}`}>
+                                        {status === 'sent' ? '✓' : '✓✓'}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="message-info-time">
+                                      {new Date(message.createdAt).toLocaleTimeString([], {
+                                        hour: 'numeric',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                    {translateInlineBtn}
+                                  </>
                                 )}
-                              </span>
-                            ))}
+                              </div>
+                            </article>
+                          </div>
+
+                          {!message.deletedAt && (message.reactions ?? []).length > 0 && (
+                            <div className="message-reactions message-reactions-below" aria-label="Reactions">
+                              {summarizeReactions(message.reactions ?? [], user.id).map((group) => (
+                                <span
+                                  key={group.emoji}
+                                  className={`message-reaction-chip ${group.mine ? 'message-reaction-chip--mine' : ''}`}
+                                  title={group.title}
+                                >
+                                  <span className="message-reaction-emoji">{group.emoji}</span>
+                                  {group.count > 1 && (
+                                    <span className="message-reaction-count">{group.count}</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {!isMine && translatePanelBody && (
+                          <div className="message-translate-slot message-translate-slot--after">
+                            {translatePanelBody}
                           </div>
                         )}
                       </div>
@@ -2543,22 +2335,11 @@ export default function App() {
             <h2 id="group-modal-title" className="modal-title">
               New group
             </h2>
-            <p className="modal-subtitle">Choose a name and at least two members. You will be added automatically.</p>
+            <p className="modal-subtitle">
+              Pick at least two people. The server adds you automatically (<code>POST /api/conversations</code>).
+            </p>
 
             <form className="group-modal-form" onSubmit={(event) => void handleCreateGroup(event)}>
-              <label className="modal-field">
-                <span className="modal-label">Group name</span>
-                <input
-                  className="modal-input"
-                  value={groupTitle}
-                  onChange={(event) => setGroupTitle(event.target.value)}
-                  placeholder="e.g. Care team"
-                  maxLength={120}
-                  required
-                  autoFocus
-                />
-              </label>
-
               <div className="modal-field">
                 <span className="modal-label">Members ({groupSelectedUserIds.length} selected)</span>
                 <div className="group-member-chips">
@@ -2641,137 +2422,6 @@ export default function App() {
                 </button>
                 <button type="submit" className="modal-btn modal-btn-primary" disabled={creatingGroup}>
                   {creatingGroup ? 'Creating…' : 'Create group'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {editGroupModalOpen && (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => {
-            if (!editGroupSaving) {
-              setEditGroupModalOpen(false);
-            }
-          }}
-        >
-          <div
-            className="modal-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-group-modal-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="edit-group-modal-title" className="modal-title">
-              Edit group
-            </h2>
-            <p className="modal-subtitle">
-              Rename the group, add people, or remove other members. Use <strong>Leave group</strong> below to exit yourself.
-            </p>
-
-            <form className="group-modal-form" onSubmit={(event) => void handleSaveEditGroup(event)}>
-              <label className="modal-field">
-                <span className="modal-label">Group name</span>
-                <input
-                  className="modal-input"
-                  value={editGroupTitle}
-                  onChange={(event) => setEditGroupTitle(event.target.value)}
-                  maxLength={120}
-                  required
-                  autoFocus
-                />
-              </label>
-
-              <div className="modal-field">
-                <span className="modal-label">Members ({editGroupParticipantIds.length})</span>
-                <div className="group-member-chips">
-                  {editGroupParticipantIds.map((id) => (
-                    <span key={id} className={`group-member-chip ${id === user?.id ? 'group-member-chip--self' : ''}`}>
-                      <span>
-                        {displayNameForParticipantId(id)}
-                        {id === user?.id ? ' (you)' : ''}
-                      </span>
-                      {id !== user?.id && (
-                        <button
-                          type="button"
-                          className="group-member-chip-remove"
-                          onClick={() => removeEditGroupMember(id)}
-                          disabled={editGroupSaving || editGroupParticipantIds.length <= 2}
-                          aria-label={`Remove ${displayNameForParticipantId(id)}`}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <label className="modal-field">
-                <span className="modal-label">Add people</span>
-                <input
-                  className="modal-input"
-                  type="search"
-                  value={editGroupPickerSearch}
-                  onChange={(event) => setEditGroupPickerSearch(event.target.value)}
-                  placeholder="Search by name or email…"
-                  autoComplete="off"
-                />
-              </label>
-
-              <div className="group-picker-list" role="list">
-                {filteredEditGroupPickerPeers.length === 0 ? (
-                  <p className="muted-text">No one left to add, or no matches.</p>
-                ) : (
-                  filteredEditGroupPickerPeers.map((peer) => (
-                    <div key={peer.id} className="group-picker-row" role="listitem">
-                      <div className="group-picker-meta">
-                        <strong>{userDisplayName(peer)}</strong>
-                        <span className="group-picker-email">{peer.email}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="group-picker-add"
-                        onClick={() => addEditGroupMember(peer.id)}
-                        disabled={editGroupSaving}
-                      >
-                        Add
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {editGroupError && <p className="modal-error">{editGroupError}</p>}
-
-              <div className="modal-leave-row">
-                <button
-                  type="button"
-                  className="modal-btn modal-btn-leave"
-                  disabled={editGroupSaving}
-                  onClick={() => void handleLeaveGroup()}
-                >
-                  Leave group
-                </button>
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="modal-btn modal-btn-secondary"
-                  onClick={() => {
-                    if (!editGroupSaving) {
-                      setEditGroupModalOpen(false);
-                    }
-                  }}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="modal-btn modal-btn-primary" disabled={editGroupSaving}>
-                  {editGroupSaving ? 'Saving…' : 'Save changes'}
                 </button>
               </div>
             </form>

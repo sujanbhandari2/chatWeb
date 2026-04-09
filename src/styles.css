@@ -751,7 +751,8 @@ button {
   font-weight: 600;
 }
 
-.conversation-meta span {
+/* Only the subtitle row — avoids coloring the unread count inside .conversation-meta-top */
+.conversation-meta > span {
   font-size: 0.74rem;
   color: #64748b;
 }
@@ -763,21 +764,22 @@ button {
   height: 22px;
   padding: 0 0.45rem;
   border-radius: 999px;
-  background: #0084ff;
-  color: #ffffff;
+  background: #ffffff;
+  color: #0052a3;
   font-size: 0.72rem;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  border: 2px solid #0084ff;
+  box-shadow: 0 1px 4px rgba(0, 82, 163, 0.15);
 }
 
 .conversation-item.active .unread-badge {
-  border-color: #f0f2f5;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  border-color: #0084ff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 .conversation-item--unread.active {
@@ -915,17 +917,44 @@ button {
   align-items: flex-end;
 }
 
-/* Stable positioning context: % and scroll anchoring use only bubble + reactions, not the hover bar */
+/* Hover bar uses bottom: % on .message-bubble-wrap so translation/errors below don’t shift reactions */
 .message-content-stack {
   position: relative;
   display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.message-bubble-column {
+  display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: 100%;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.message-cluster.mine .message-bubble-column {
+  align-items: flex-end;
+}
+
+.message-bubble-wrap {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .message-cluster.mine .message-content-stack {
   align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.message-cluster.theirs .message-content-stack {
+  justify-content: flex-start;
 }
 
 /* Out of flow; anchored to .message-content-stack so showing it cannot change the % height basis */
@@ -1003,6 +1032,157 @@ button {
 
 .message-more-btn:hover {
   background: #f0f2f5;
+}
+
+.message-toolbar-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid #e4e6eb;
+  background: #ffffff;
+  color: #65676b;
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.message-toolbar-btn:hover:not(:disabled) {
+  background: #f0f2f5;
+  color: #050505;
+}
+
+.message-toolbar-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.message-toolbar-btn--active {
+  border-color: #0084ff;
+  color: #0084ff;
+  background: #eff6ff;
+}
+
+.message-toolbar-btn--busy {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.message-toolbar-btn--translate {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.message-toolbar-btn--bubble-inline {
+  width: 1.35rem;
+  height: 1.35rem;
+  border: none;
+  box-shadow: none;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(5, 5, 5, 0.55);
+}
+
+.message-bubble.mine .message-toolbar-btn--bubble-inline {
+  background: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.message-bubble.mine .message-toolbar-btn--bubble-inline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+}
+
+.message-bubble.theirs .message-toolbar-btn--bubble-inline:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+  color: #050505;
+}
+
+.message-bubble.mine .message-toolbar-btn--bubble-inline.message-toolbar-btn--active {
+  background: rgba(255, 255, 255, 0.38);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.message-bubble.theirs .message-toolbar-btn--bubble-inline.message-toolbar-btn--active {
+  background: #eff6ff;
+  color: #0084ff;
+  border: 1px solid rgba(0, 132, 255, 0.35);
+}
+
+.message-translate-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.message-toolbar-icon {
+  display: block;
+}
+
+.message-translate-slot {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  /* Let the parent .message-content-stack row sit bubble | translate | chips on one line */
+  width: auto;
+  max-width: min(100%, 420px);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.message-translate-slot--before {
+  margin-bottom: 0;
+}
+
+.message-translate-slot--after {
+  margin-top: 0;
+}
+
+.message-cluster.mine .message-translate-slot--before {
+  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.message-cluster.theirs .message-translate-slot--after {
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+
+.message-translation-aux--inline {
+  margin-top: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(100%, 360px);
+}
+
+.message-translation-aux {
+  max-width: min(100%, 420px);
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.message-translation-aux--mine {
+  margin-left: auto;
+  align-self: flex-end;
+}
+
+.message-translation-aux--theirs {
+  margin-right: auto;
+  align-self: flex-start;
+}
+
+.message-translation-aux-status {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
 }
 
 .message-actions-dropdown {
@@ -1105,6 +1285,9 @@ button {
   border-radius: 18px;
   padding: 0.5rem 0.65rem 0.35rem;
   box-shadow: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .message-bubble.mine {
@@ -1295,9 +1478,12 @@ button {
 }
 
 .message-reactions-below {
-  margin-top: -2px;
+  margin-top: 0.2rem;
   padding: 0 2px;
   justify-content: flex-end;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .message-cluster.theirs .message-reactions-below {
@@ -1338,11 +1524,15 @@ button {
 .message-info {
   margin-top: 0.2rem;
   display: flex;
-  gap: 0.35rem;
+  gap: 0.25rem;
   align-items: center;
   justify-content: flex-end;
   font-size: 0.68rem;
   opacity: 0.85;
+}
+
+.message-info-time {
+  flex-shrink: 0;
 }
 
 .message-bubble.mine .message-info {

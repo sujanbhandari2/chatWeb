@@ -1,15 +1,20 @@
-/** Prisma conversation type enum — extend as backend adds values */
-export type ConversationType = string;
+export type Role = 'CLIENT' | 'AGENT' | 'ADMIN';
+
+export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE';
 
-/** User returned from POST /api/auth/create */
+export type DevicePlatform = 'IOS' | 'ANDROID' | 'WEB';
+
+/** User from auth responses (POST /api/auth/create | login) */
 export interface AuthUser {
   id: string;
-  name: string | null;
-  email: string;
+  username: string;
   tenantId: string;
-  status: string | null;
+  role: Role;
+  name: string;
+  email: string;
+  status: UserStatus;
 }
 
 export interface CreateAccountResponse {
@@ -17,43 +22,59 @@ export interface CreateAccountResponse {
   user: AuthUser;
 }
 
-/** @deprecated Use CreateAccountResponse; kept for gradual migration */
+/** @deprecated Use CreateAccountResponse */
 export type LoginResponse = CreateAccountResponse;
 
+/** Nested user on conversation participants (REST list shape) */
+export interface ConversationParticipantUser {
+  id: string;
+  username: string;
+  role: Role;
+  name?: string | null;
+  email?: string | null;
+}
+
+/** Display-oriented user (participants + reactions); tolerate partial API shapes */
 export interface PublicUser {
   id: string;
+  username?: string;
   name: string | null;
   email: string;
-  avatarUrl: string | null;
-  status: string | null;
+  avatarUrl?: string | null;
+  status?: string | null;
+  role?: Role;
 }
 
 export interface TenantUser {
   id: string;
   tenantId: string;
+  username: string;
   name: string | null;
   email: string;
-  avatarUrl: string | null;
-  status: string | null;
+  role: Role;
+  status: UserStatus;
   createdAt: string;
   isOnline: boolean;
 }
 
 export interface ConversationParticipant {
-  userId: string;
+  id: string;
   conversationId: string;
-  user: PublicUser;
+  userId: string;
+  user: ConversationParticipantUser;
 }
 
+/** GET /api/conversations item */
 export interface Conversation {
   id: string;
   tenantId: string;
-  type: ConversationType;
-  title: string | null;
-  createdBy: string | null;
+  isGlobal: boolean;
   createdAt: string;
-  updatedAt: string;
   participants: ConversationParticipant[];
+  /** Not in current API reference; kept optional for sorting / legacy payloads */
+  updatedAt?: string;
+  title?: string | null;
+  type?: string;
 }
 
 export interface MessageReaction {
@@ -97,7 +118,6 @@ export interface Message {
   attachments: unknown[];
   replyToMessage?: ReplyToMessage | null;
   reactions: MessageReaction[];
-  /** Legacy / socket — not always present on REST payloads */
   tenantId?: string;
   type?: MessageType;
   deletedAt?: string | null;
@@ -123,19 +143,16 @@ export interface UploadFileResponse {
   size: number;
 }
 
-export interface TranscribeResponse {
-  data: {
-    text: string;
-    fromCache: boolean;
-  };
-}
-
-export interface TranslateResponse {
-  data: {
-    translatedText: string;
-  };
-}
-
 export interface HealthResponse {
   status: string;
+}
+
+/** POST /api/speech/transcribe — 200 body */
+export interface TranscribeResponse {
+  text: string;
+}
+
+/** POST /api/speech/translate — 200 body */
+export interface TranslateResponse {
+  translatedText: string;
 }
