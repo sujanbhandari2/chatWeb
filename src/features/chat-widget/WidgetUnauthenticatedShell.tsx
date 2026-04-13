@@ -8,6 +8,6 @@ export function WidgetUnauthenticatedShell({
 }: WidgetUnauthenticatedShellProps): JSX.Element {
   return wrapWidgetContent(
     config,
-    <WidgetUnauthenticatedContent widgetMissingTenant={isMissingTenant} />
+    <WidgetUnauthenticatedContent config={config} widgetMissingTenant={isMissingTenant} />
   );
 }

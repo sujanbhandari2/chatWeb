@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { WidgetInitConfig } from '../../schemas/widget.schemas';
 import { WidgetChat } from './ChatWidget';
+import { AuthForm } from '../auth/AuthForm';
 
 /** Wraps panel body content in the floating widget (launcher + panel). */
 export function wrapWidgetContent(
@@ -28,11 +29,13 @@ export function WidgetSessionLoadingContent(): JSX.Element {
 }
 
 export type WidgetUnauthenticatedContentProps = {
+  config: WidgetInitConfig;
   widgetMissingTenant: boolean;
 };
 
 /** Login/register placeholder when the user is not signed in. */
 export function WidgetUnauthenticatedContent({
+  config,
   widgetMissingTenant
 }: WidgetUnauthenticatedContentProps): JSX.Element {
   return (
@@ -55,8 +58,7 @@ export function WidgetUnauthenticatedContent({
         <div>
           <h3>User is not authenticated and missing token or user</h3>
         </div>
-
-        {/* <AuthForm widgetMode widgetConfig={...} widgetMissingTenant={widgetMissingTenant} /> */}
+        <AuthForm widgetMode={true} widgetConfig={config} widgetMissingTenant={widgetMissingTenant} />
       </div>
     </div>
   );
