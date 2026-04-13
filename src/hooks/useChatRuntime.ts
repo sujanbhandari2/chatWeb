@@ -6,6 +6,7 @@ import { SELECTED_CONVERSATION_STORAGE_KEY } from '../constants/session.constant
 import { CLIENT_GOING_OFFLINE_EVENT } from '../features/chat/chat.constants';
 import { setChatSocketInstance } from '../utils/chat-socket-bridge';
 import { pickPresence, pickUserId } from '../utils/chat.utils';
+import { getResolvedApiKey } from '../lib/api-credentials';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
 import { selectRuntimeSubscriptionSlice } from '../store/chat/chat-selectors';
@@ -21,7 +22,8 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
-  const socket = useChatSocket(token || undefined);
+  const canUseApi = Boolean(token?.trim() || getResolvedApiKey());
+  const socket = useChatSocket(token?.trim() ? token : undefined);
 
   const messageScrollerRef = useRef<HTMLElement | null>(null);
   const chatHeaderMenuRef = useRef<HTMLDivElement | null>(null);
@@ -411,7 +413,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   }, [socket, conversations]);
 
   useEffect(() => {
-    if (!token) {
+    if (!canUseApi) {
       return;
     }
 
@@ -420,10 +422,10 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     }, 8000);
 
     return () => window.clearInterval(interval);
-  }, [token]);
+  }, [canUseApi]);
 
   useEffect(() => {
-    if (!token || !user) {
+    if (!canUseApi || !user) {
       return;
     }
 
@@ -447,13 +449,13 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     return () => {
       cancelled = true;
     };
-  }, [token, user, clearSession]);
+  }, [canUseApi, user, clearSession]);
 
   useEffect(() => {
-    if (!token) {
+    if (!user) {
       useChatStore.getState().reset();
     }
-  }, [token]);
+  }, [user]);
 
   const startRecording = async (): Promise<void> => {
     if (!voiceRecording) {
@@ -461,7 +463,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     }
     const store = useChatStore.getState();
     const authToken = useAuthStore.getState().token;
-    if (!authToken || !store.selectedConversationId || store.isRecording) {
+    if ((!authToken?.trim() && !getResolvedApiKey()) || !store.selectedConversationId || store.isRecording) {
       return;
     }
 

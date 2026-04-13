@@ -42,7 +42,7 @@ function RegisterFields({
     formState: { errors }
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { tenantId: defaultTenantId, name: '', email: '' }
+    defaultValues: { tenantId: defaultTenantId, name: '', email: '', username: '' }
   });
 
   useEffect(() => {
@@ -74,6 +74,13 @@ function RegisterFields({
       {errors.tenantId && <p className="error-banner">{errors.tenantId.message}</p>}
       <input {...register('name')} placeholder="Name" required maxLength={120} disabled={disabled} />
       {errors.name && <p className="error-banner">{errors.name.message}</p>}
+      <input
+        {...register('username')}
+        placeholder="Username (optional)"
+        maxLength={80}
+        disabled={disabled}
+      />
+      {errors.username && <p className="error-banner">{errors.username.message}</p>}
       <input {...register('email')} placeholder="Email" type="email" required disabled={disabled} />
       {errors.email && <p className="error-banner">{errors.email.message}</p>}
       <button type="submit" disabled={disabled || mutation.isPending}>

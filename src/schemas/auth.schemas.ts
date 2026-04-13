@@ -2,15 +2,17 @@ import { z } from 'zod';
 
 const nameSchema = z.string().min(1).max(120);
 const emailSchema = z.string().email();
+const tenantIdSchema = z.string().max(120).optional();
 
 export const registerSchema = z.object({
-  tenantId: z.string(),
+  tenantId: tenantIdSchema,
   name: nameSchema,
-  email: emailSchema
+  email: emailSchema,
+  username: z.string().max(80).optional()
 });
 
 export const loginSchema = z.object({
-  tenantId: z.string().uuid(),
+  tenantId: tenantIdSchema,
   email: emailSchema
 });
 

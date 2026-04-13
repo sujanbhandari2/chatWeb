@@ -1,7 +1,9 @@
 import { WidgetAuthenticatedLayout } from '../../features/chat-widget/WidgetAuthenticatedLayout';
 import { WidgetSessionLoadingShell } from '../../features/chat-widget/WidgetSessionLoadingShell';
+import { WidgetUnauthorizedShell } from '../../features/chat-widget/WidgetUnauthorizedShell';
 import { WidgetUnauthenticatedShell } from '../../features/chat-widget/WidgetUnauthenticatedShell';
 import { useWidgetConfig } from '../../hooks/useWidgetConfig';
+import { getResolvedApiKey } from '../../lib/api-credentials';
 import type { WidgetChatAppProps } from '../../types/widget-app.types';
 import { ChatSidebar } from './chat-app/ChatSidebar';
 import { ChatThreadView } from './chat-app/ChatThreadView';
@@ -29,7 +31,12 @@ export default function WidgetChatApp({ widgetConfig }: WidgetChatAppProps): JSX
     return <WidgetSessionLoadingShell config={config} />;
   }
 
-  if (!token || !user) {
+  if (!getResolvedApiKey()) {
+    return <WidgetUnauthorizedShell config={config} />;
+  }
+
+  const canUseApi = Boolean(token?.trim() || getResolvedApiKey());
+  if (!user || !canUseApi) {
     return <WidgetUnauthenticatedShell config={config} isMissingTenant={isMissingTenant} />;
   }
 

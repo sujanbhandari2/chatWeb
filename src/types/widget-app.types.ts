@@ -30,6 +30,10 @@ export type WidgetUnauthenticatedShellProps = {
   isMissingTenant: boolean;
 };
 
+export type WidgetUnauthorizedShellProps = {
+  config: WidgetInitConfig;
+};
+
 export type WidgetAuthenticatedLayoutProps = {
   config: WidgetInitConfig;
   runtime: ChatRuntimeValue;

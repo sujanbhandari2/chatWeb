@@ -5,9 +5,10 @@
  *
  * **Merge order** (each step overrides the previous): `getWidgetProfilePartial()` from
  * `config/widget.config.ts` → `window.__HEALTHCHAT_WIDGET_CONFIG__` → URL search params
- * (`parseWidgetConfigFromSearchParams`). **Embedders may set tenant routing only** on
- * `backend`: `tenantId`, `lockTenant`, `hideTenantField`. **API URLs, sockets, timeouts, and
- * non-tenant `backend` keys** come only from your built profile. **Branding / typography / a11y /
+ * (`parseWidgetConfigFromSearchParams`). **Embedders may set** on `backend`: `tenantId`,
+ * `lockTenant`, `hideTenantField`, and **`accessKey` / `apiKey`** (sent as `X-Api-Key`; required
+ * for the chat widget to load — see `docs/WIDGET_WEBSITE.md`). **API URLs, sockets, timeouts, and
+ * other `backend` keys** come from your built profile unless also allowed above. **Branding / typography / a11y /
  * styling (e.g. `classPrefix`), `features`, and `app`** from window/URL are stripped. **Colors** from the URL are ignored in **production**; in **dev**,
  * `?__hc_cfg_preview=1` with `primaryColor`, `secondaryColor`, … (see `buildWidgetIframeSrc` option
  * `configuratorPreview`) merges for the configurator iframe only.
@@ -27,6 +28,7 @@ import {
   type WidgetInitConfig,
 } from '../schemas/widget.schemas';
 import { applyRuntimeApiOverrides } from './runtime-endpoints.utils';
+import { setRuntimeApiCredentials } from '../lib/api-credentials';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -86,8 +88,10 @@ const num = (v: unknown): Num => (typeof v === 'number' && Number.isFinite(v) ? 
 const bool = (v: unknown): Bool => (typeof v === 'boolean' ? v : undefined);
 
 export function legacyFlatToPartialConfig(flat: Record<string, unknown>): DeepPartialWidgetConfig {
+  const apiFromFlat = str(flat.apiKey) ?? str(flat.accessKey);
   const backend = pickDefined({
     tenantId: str(flat.tenantId),
+    apiKey: apiFromFlat !== undefined && apiFromFlat.trim() !== '' ? apiFromFlat.trim() : undefined,
     lockTenant: bool(flat.lockTenant),
     hideTenantField: bool(flat.hideTenantField)
   });
@@ -207,6 +211,8 @@ export function parseWidgetConfigFromSearchParams(
 
   const flat: Record<string, unknown> = pickDefined({
     tenantId:           get('tenantId') ?? get('tenant') ?? undefined,
+    accessKey:          get('accessKey') ?? undefined,
+    apiKey:             get('apiKey') ?? undefined,
     lockTenant:         parseBool(get('lockTenant')),
     hideTenantField:    parseBool(get('hideTenantField')),
     position:           position && LAUNCHER_POSITIONS.has(position as never) ? position : undefined,
@@ -307,6 +313,10 @@ export function applyWidgetRuntimeFromConfig(config: WidgetInitConfig): void {
     socketUrl: b?.socketUrl,
     apiTimeout: b?.apiTimeout
   });
+  setRuntimeApiCredentials({
+    apiKey: b?.apiKey?.trim() || b?.accessKey?.trim(),
+    tenantId: b?.tenantId
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +328,7 @@ type Scalar = string | number | boolean;
 /** Query keys safe for third-party embeds: tenant routing + layout + interaction (not API/branding). */
 const IFRAME_PARAM_MAP: Array<[string, (c: WidgetInitConfig) => Scalar | undefined]> = [
   ['tenantId', (c) => c.backend?.tenantId],
+  ['accessKey', (c) => c.backend?.accessKey ?? c.backend?.apiKey],
   ['lockTenant', (c) => c.backend?.lockTenant],
   ['hideTenantField', (c) => c.backend?.hideTenantField],
   ['position', (c) => c.launcher?.position],
@@ -439,8 +450,10 @@ function sanitizeEmbedderBackendPartial(
   }
   const b = backend as Record<string, unknown>;
   const tid = str(b.tenantId);
+  const key = str(b.apiKey) ?? str(b.accessKey);
   return pickDefined({
     tenantId: tid !== undefined && tid.trim() !== '' ? tid.trim() : undefined,
+    apiKey: key !== undefined && key.trim() !== '' ? key.trim() : undefined,
     lockTenant: bool(b.lockTenant),
     hideTenantField: bool(b.hideTenantField)
   }) as DeepPartialWidgetConfig['backend'];

@@ -1,5 +1,7 @@
 # Chat widget — maintainer guide
 
+**Website integration (access key, iframe, `window` config):** [WIDGET_WEBSITE.md](./WIDGET_WEBSITE.md)
+
 ## What to edit when
 
 | Goal | Where |
@@ -27,7 +29,7 @@ Entries: [`src/main.tsx`](../src/main.tsx) (test app) and [`src/main-widget.tsx`
 
 ## Security model (embed)
 
-Untrusted hosts must not enable uploads, branding, or feature flags via query string. Keys stripped from `window`/URL are listed in **`CLIENT_VENDOR_TOP_KEYS`** in `widget-runtime.utils.ts` (includes `features`, `app`, `colors`, `uiElements`, …). Only a small **`backend`** subset is kept from embed config.
+Untrusted hosts must not enable uploads, branding, or feature flags via query string. Keys stripped from `window`/URL are listed in **`CLIENT_VENDOR_TOP_KEYS`** in `widget-runtime.utils.ts` (includes `features`, `app`, `colors`, `uiElements`, …). From embed `backend`, **`tenantId`**, **`lockTenant`**, **`hideTenantField`**, **`accessKey`**, and **`apiKey`** are kept so the host can supply `X-Tenant-Id` / `X-Api-Key` (see [WIDGET_WEBSITE.md](./WIDGET_WEBSITE.md)).
 
 **Client flags are not authorization** — enforce sensitive actions on the server.
 

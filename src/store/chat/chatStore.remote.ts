@@ -2,7 +2,7 @@
  * Actions that talk to the backend: REST, uploads, socket acks, and speech APIs.
  */
 import type { FormEvent } from 'react';
-import * as conversationsApi from '../../api/conversations.api';
+import * as chatApi from '../../api/chat.api';
 import { getTenantUsers } from '../../api/users.api';
 import { uploadFileRequest } from '../../api/upload.api';
 import { transcribeSpeechRequest, translateTextRequest } from '../../api/speech.api';
@@ -13,6 +13,7 @@ import { WidgetPanelType, type Message, type MessageReaction, type MessageType }
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../../constants/session.constants';
 import { CLIENT_GOING_OFFLINE_EVENT } from '../../features/chat/chat.constants';
 import { chatEmitWithAck, getChatSocket } from '../../utils/chat-socket-bridge';
+import { getResolvedApiKey } from '../../lib/api-credentials';
 import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
 import { conversationTitleForUser, findDirectConversation } from './chatStore.utils';
@@ -41,7 +42,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
 
     selectConversation: async (conversationId) => {
       const token = useAuthStore.getState().token;
-      if (!token) {
+      if (!token?.trim() && !getResolvedApiKey()) {
         return;
       }
       const previousConversationId = get().selectedConversationId;
@@ -59,7 +60,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         return next;
       });
       try {
-        const messagesPage = await conversationsApi.getMessagesPage(conversationId);
+        const messagesPage = await chatApi.getMessagesPage(conversationId);
         get().setMessages(messagesPage.data.map(normalizeMessage));
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to load conversation');
@@ -67,7 +68,11 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     },
 
     refreshConversations: async () => {
-      const data = await conversationsApi.listConversations();
+      const uid = useAuthStore.getState().user?.id;
+      if (!uid) {
+        return [];
+      }
+      const data = await chatApi.listConversations(uid);
       get().setConversations(data);
       return data;
     },
@@ -99,7 +104,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           delete next[initialConversationId];
           return next;
         });
-        const messagesPage = await conversationsApi.getMessagesPage(initialConversationId);
+        const messagesPage = await chatApi.getMessagesPage(initialConversationId);
         get().setMessages(messagesPage.data.map(normalizeMessage));
       }
     },
@@ -107,7 +112,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     openDirectChat: async (target) => {
       const token = useAuthStore.getState().token;
       const user = useAuthStore.getState().user;
-      if (!token || !user) {
+      if (!user || (!token?.trim() && !getResolvedApiKey())) {
         return;
       }
       get().setError('');
@@ -119,7 +124,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           await get().selectConversation(existing.id);
           return;
         }
-        const createdConversation = await conversationsApi.createDirectConversation(target.id);
+        const createdConversation = await chatApi.createDirectConversation(target.id, user.id);
         await get().refreshConversations();
         get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().selectConversation(createdConversation.id);
@@ -134,7 +139,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       event.preventDefault();
       const token = useAuthStore.getState().token;
       const user = useAuthStore.getState().user;
-      if (!token || !user) {
+      if (!user || (!token?.trim() && !getResolvedApiKey())) {
         return;
       }
       const { groupTitle, groupSelectedUserIds } = get();
@@ -151,7 +156,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setGroupModalError('');
       try {
         const participantIds = [...new Set([user.id, ...groupSelectedUserIds])];
-        const created = await conversationsApi.createGroupConversation(title, participantIds);
+        const created = await chatApi.createGroupConversation(title, participantIds);
         get().setWidgetRailPane(WidgetPanelType.CHATS);
         get().setGroupTitle('');
         get().setGroupSelectedUserIds([]);
@@ -169,7 +174,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       event.preventDefault();
       const token = useAuthStore.getState().token;
       const user = useAuthStore.getState().user;
-      if (!token || !user) {
+      if (!user || (!token?.trim() && !getResolvedApiKey())) {
         return;
       }
       const {
@@ -196,20 +201,20 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setEditGroupError('');
 
       try {
-        await conversationsApi.updateConversationById(convId, { title });
+        await chatApi.updateConversationById(convId, { title });
 
         const added = [...current].filter((id) => !initial.has(id));
         const removed = [...initial].filter((id) => !current.has(id));
         const removedOthers = removed.filter((id) => id !== user.id);
 
         if (added.length > 0) {
-          await conversationsApi.addConversationParticipants(convId, added);
+          await chatApi.addConversationParticipants(convId, added);
         }
         for (const uid of removedOthers) {
-          await conversationsApi.removeConversationParticipant(convId, uid);
+          await chatApi.removeConversationParticipant(convId, uid);
         }
         if (removedSelf) {
-          await conversationsApi.removeConversationParticipant(convId, user.id);
+          await chatApi.removeConversationParticipant(convId, user.id);
         }
 
         get().setWidgetRailPane(WidgetPanelType.CHATS);
@@ -230,7 +235,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     handleLeaveGroup: async () => {
       const token = useAuthStore.getState().token;
       const user = useAuthStore.getState().user;
-      if (!token || !user) {
+      if (!user || (!token?.trim() && !getResolvedApiKey())) {
         return;
       }
       const convId = get().editGroupConversationId;
@@ -243,7 +248,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setEditGroupSaving(true);
       get().setEditGroupError('');
       try {
-        await conversationsApi.removeConversationParticipant(convId, user.id);
+        await chatApi.removeConversationParticipant(convId, user.id);
         get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().refreshConversations();
         get().setSelectedConversationId('');
@@ -261,7 +266,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       const { conversations, selectedConversationId } = get();
       const selectedConversation =
         conversations.find((conversation) => conversation.id === selectedConversationId) ?? null;
-      if (!token || !selectedConversation || !user) {
+      if (!user || (!token?.trim() && !getResolvedApiKey()) || !selectedConversation) {
         return;
       }
       if (isGlobalConversation(selectedConversation)) {
@@ -278,7 +283,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setError('');
       try {
         const id = selectedConversation.id;
-        await conversationsApi.deleteConversationById(id);
+        await chatApi.deleteConversationById(id);
         await get().refreshConversations();
         get().setSelectedConversationId('');
         get().setMessages([]);
@@ -294,16 +299,34 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       if (!selectedConversationId || !text.trim()) {
         return;
       }
+      const trimmed = text.trim();
+      const sender = useAuthStore.getState().user;
       try {
         const message = await chatEmitWithAck<Message>('send_message', {
           conversationId: selectedConversationId,
           type: 'TEXT' as MessageType,
-          content: text.trim()
+          content: trimmed
         });
-        get().upsertMessage(message);
+        get().upsertMessage(normalizeMessage(message));
         get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
         get().setText('');
       } catch (err) {
+        if (sender && getResolvedApiKey()) {
+          try {
+            const message = await chatApi.postRestMessage(selectedConversationId, {
+              type: 'TEXT',
+              content: trimmed,
+              senderId: sender.id
+            });
+            get().upsertMessage(normalizeMessage(message));
+            get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
+            get().setText('');
+            return;
+          } catch (restErr) {
+            get().setError(restErr instanceof Error ? restErr.message : 'Failed to send message');
+            return;
+          }
+        }
         get().setError(err instanceof Error ? err.message : 'Failed to send message');
       }
     },
@@ -311,18 +334,33 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     handleSendUploadedMessage: async (file, type) => {
       const token = useAuthStore.getState().token;
       const { selectedConversationId } = get();
-      if (!token || !selectedConversationId) {
+      if ((!token?.trim() && !getResolvedApiKey()) || !selectedConversationId) {
         return;
       }
       try {
         const uploaded = await uploadFileRequest(file);
-        const message = await chatEmitWithAck<Message>('send_message', {
-          conversationId: selectedConversationId,
-          type,
-          content: uploaded.url
-        });
-        get().upsertMessage(message);
-        get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
+        const user = useAuthStore.getState().user;
+        try {
+          const message = await chatEmitWithAck<Message>('send_message', {
+            conversationId: selectedConversationId,
+            type,
+            content: uploaded.url
+          });
+          get().upsertMessage(normalizeMessage(message));
+          get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
+        } catch (socketErr) {
+          if (user && getResolvedApiKey()) {
+            const message = await chatApi.postRestMessage(selectedConversationId, {
+              type,
+              content: uploaded.url,
+              senderId: user.id
+            });
+            get().upsertMessage(normalizeMessage(message));
+            get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
+          } else {
+            throw socketErr;
+          }
+        }
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Upload failed');
       }
@@ -379,9 +417,9 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       };
 
       void (async (): Promise<void> => {
-        if (token) {
+        if (token?.trim() || getResolvedApiKey()) {
           try {
-            const updated = await conversationsApi.addMessageReaction(conversationId, messageId, emoji);
+            const updated = await chatApi.addMessageReaction(conversationId, messageId, emoji);
             if (updated && typeof updated === 'object' && 'id' in updated && updated.id === messageId) {
               get().setMessages((previous) =>
                 previous.map((m) => (m.id === messageId ? normalizeMessage(updated) : m))
@@ -458,14 +496,14 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
 
     handleTranscribeVoiceMessage: async (message) => {
       const token = useAuthStore.getState().token;
-      if (!token) {
+      if (!token?.trim() && !getResolvedApiKey()) {
         get().setError('Sign in required');
         return;
       }
       const id = message.id;
       get().patchMessageSpeechUi(id, { loading: 'transcribe', error: undefined });
       try {
-        const blob = await fetchMediaBlob(message.content, token);
+        const blob = await fetchMediaBlob(message.content, token?.trim() ? token : undefined);
         const out = await transcribeSpeechRequest(blob, { filename: 'message.webm' });
         const text = out.data?.text ?? '';
         get().patchMessageSpeechUi(id, { loading: undefined, transcript: text });
@@ -479,7 +517,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
 
     handleTranslateForMessage: async (message, sourceText, targetLanguage) => {
       const token = useAuthStore.getState().token;
-      if (!token) {
+      if (!token?.trim() && !getResolvedApiKey()) {
         get().setError('Sign in required');
         return;
       }

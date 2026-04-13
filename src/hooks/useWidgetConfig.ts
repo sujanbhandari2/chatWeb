@@ -19,7 +19,8 @@ export function useWidgetConfig(optionalConfig?: WidgetInitConfig): WidgetConfig
 
   const { widgetRailPane, selectedConversationId } = useChatSelectors(selectWidgetChrome);
 
-  const isMissingTenant = Boolean(!config.backend?.tenantId?.trim());
+  /** Tenant is optional when `X-Api-Key` is set; do not block the auth form. */
+  const isMissingTenant = false;
   const headerLabel = getPanelHeaderLabel(widgetRailPane);
   const overlayVisible = isChatOverlayVisible(selectedConversationId, widgetRailPane);
 

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as conversationsApi from '../api/conversations.api';
+import * as chatApi from '../api/chat.api';
+import { getResolvedApiKey } from '../lib/api-credentials';
 import { useAuthStore } from '../store/useAuthStore';
 import { normalizeMessage } from '../utils/chat.utils';
 
@@ -11,20 +12,23 @@ export const conversationKeys = {
 
 export const useConversationsQuery = () => {
   const token = useAuthStore((s) => s.token);
+  const userId = useAuthStore((s) => s.user?.id);
+  const canQuery = Boolean(userId && (token?.trim() || getResolvedApiKey()));
   return useQuery({
     queryKey: conversationKeys.list(),
-    queryFn: () => conversationsApi.listConversations(),
-    enabled: !!token
+    queryFn: () => chatApi.listConversations(userId!),
+    enabled: canQuery
   });
 };
 
 export const useMessagesQuery = (conversationId: string) => {
   const token = useAuthStore((s) => s.token);
+  const canQuery = Boolean(conversationId && (token?.trim() || getResolvedApiKey()));
   return useQuery({
     queryKey: conversationKeys.messages(conversationId),
     queryFn: () =>
-      conversationsApi.getMessagesPage(conversationId).then((p) => p.data.map(normalizeMessage)),
-    enabled: !!token && !!conversationId
+      chatApi.getMessagesPage(conversationId).then((p) => p.data.map(normalizeMessage)),
+    enabled: canQuery
   });
 };
 
@@ -37,13 +41,13 @@ export const usePrefetchMessages = () => {
   const qc = useQueryClient();
   const token = useAuthStore((s) => s.token);
   return (conversationId: string) => {
-    if (!token || !conversationId) {
+    if (!conversationId || (!token?.trim() && !getResolvedApiKey())) {
       return;
     }
     void qc.prefetchQuery({
       queryKey: conversationKeys.messages(conversationId),
       queryFn: () =>
-        conversationsApi.getMessagesPage(conversationId).then((p) => p.data.map(normalizeMessage))
+        chatApi.getMessagesPage(conversationId).then((p) => p.data.map(normalizeMessage))
     });
   };
 };
@@ -51,7 +55,13 @@ export const usePrefetchMessages = () => {
 export const useCreateDirectConversationMutation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (userId: string) => conversationsApi.createDirectConversation(userId),
+    mutationFn: (userId: string) => {
+      const selfId = useAuthStore.getState().user?.id;
+      if (!selfId) {
+        throw new Error('Not signed in');
+      }
+      return chatApi.createDirectConversation(userId, selfId);
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };
@@ -60,7 +70,7 @@ export const useCreateGroupConversationMutation = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ title, participantIds }: { title: string; participantIds: string[] }) =>
-      conversationsApi.createGroupConversation(title, participantIds),
+      chatApi.createGroupConversation(title, participantIds),
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };
@@ -68,7 +78,7 @@ export const useCreateGroupConversationMutation = () => {
 export const useDeleteConversationMutation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (conversationId: string) => conversationsApi.deleteConversationById(conversationId),
+    mutationFn: (conversationId: string) => chatApi.deleteConversationById(conversationId),
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };
@@ -77,7 +87,7 @@ export const useUpdateConversationMutation = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ conversationId, title }: { conversationId: string; title: string }) =>
-      conversationsApi.updateConversationById(conversationId, { title }),
+      chatApi.updateConversationById(conversationId, { title }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };
@@ -86,7 +96,7 @@ export const useAddParticipantsMutation = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ conversationId, userIds }: { conversationId: string; userIds: string[] }) =>
-      conversationsApi.addConversationParticipants(conversationId, userIds),
+      chatApi.addConversationParticipants(conversationId, userIds),
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };
@@ -95,7 +105,7 @@ export const useRemoveParticipantMutation = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ conversationId, userId }: { conversationId: string; userId: string }) =>
-      conversationsApi.removeConversationParticipant(conversationId, userId),
+      chatApi.removeConversationParticipant(conversationId, userId),
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };

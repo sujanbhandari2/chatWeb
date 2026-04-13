@@ -3,11 +3,13 @@ export type ConversationType = string;
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE';
 
-/** User returned from POST /api/auth/create */
+/** End-user profile (e.g. `POST /v1/chat/users` or session payload). */
 export interface AuthUser {
   id: string;
   name: string | null;
   email: string;
+  /** Chat API `username` when using `/v1/chat/users`. */
+  username?: string;
   tenantId: string;
   status: string | null;
 }

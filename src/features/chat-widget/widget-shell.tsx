@@ -33,6 +33,26 @@ export type WidgetUnauthenticatedContentProps = {
   widgetMissingTenant: boolean;
 };
 
+/** No launcher actions — static message inside the widget panel. */
+export function WidgetUnauthorizedContent(): JSX.Element {
+  return (
+    <div className="auth-shell auth-shell--widget">
+      <div className="auth-card" style={{ borderColor: '#fecdd3', boxShadow: '0 20px 48px rgba(185, 28, 28, 0.12)' }}>
+        <h1>Unauthorized</h1>
+        <p className="auth-subtitle">
+          This chat widget must receive an <strong>access key</strong> so it can call the API as your client. Add{' '}
+          <code>backend.accessKey</code> (or <code>backend.apiKey</code>) in your embed config, pass{' '}
+          <code>?accessKey=…</code> on the iframe URL (dev only recommended), or set <code>VITE_API_KEY</code> for local
+          development.
+        </p>
+        <p className="auth-subtitle" style={{ marginTop: '0.75rem' }}>
+          See <code>docs/WIDGET_WEBSITE.md</code> for full website integration steps.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** Login/register placeholder when the user is not signed in. */
 export function WidgetUnauthenticatedContent({
   config,
@@ -43,21 +63,19 @@ export function WidgetUnauthenticatedContent({
       <div className="auth-card">
         <h1>Healthcare Chat</h1>
         <p className="auth-subtitle">
-          Register uses <code>tenantId</code>, name, and email. Login uses a UUID <code>tenantId</code> and email,
-          matching server Zod schemas.
+          Register creates a <strong>chat user</strong> (name, email, optional username). Login finds an existing chat
+          user by email. The host must already supply an <strong>access key</strong> (<code>backend.accessKey</code> or{' '}
+          <code>backend.apiKey</code>) so requests include <code>X-Api-Key</code>. Optionally set{' '}
+          <code>backend.tenantId</code> for <code>X-Tenant-Id</code>.
         </p>
 
-        {widgetMissingTenant && (
-          <p className="error-banner">
-            Missing <code>tenantId</code>. Your host sets the default in <code>src/config/widget.config.ts</code>, or
-            customers can pass <code>tenantId</code> (or <code>tenant</code>) on the widget URL. API and socket URLs are
-            not customer-configurable.
+        {!config.backend?.tenantId?.trim() && (
+          <p className="error-banner" style={{ borderColor: '#e2e8f0', background: '#f8fafc', color: '#475569' }}>
+            Optional: set <code>backend.tenantId</code> or <code>?tenantId=</code> if your API expects{' '}
+            <code>X-Tenant-Id</code>.
           </p>
         )}
 
-        <div>
-          <h3>User is not authenticated and missing token or user</h3>
-        </div>
         <AuthForm widgetMode={true} widgetConfig={config} widgetMissingTenant={widgetMissingTenant} />
       </div>
     </div>
