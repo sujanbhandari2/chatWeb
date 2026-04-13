@@ -10,6 +10,12 @@
  * ></script>
  *
  * Or point data-config-id at a <script type="application/json" id="hc-cfg">{ ... }</script>
+ *
+ * Embed / height: the widget iframe is resized when the chat panel opens or closes (postMessage
+ * type "resize" from source "healthchat-widget"). This script applies those dimensions so the host
+ * page is not covered by a tall transparent iframe after close. If you embed widget.html without
+ * this loader, add an equivalent message listener and set iframe width/height from the payload,
+ * and avoid wrapping the iframe in a fixed large-height container.
  */
 (function () {
   'use strict';
@@ -78,6 +84,9 @@
     return u.toString();
   }
 
+  /** Closed-state padding around launcher only; keep in sync with WIDGET_EMBED_CLOSED_CHROME_PX in widget-embed-resize.utils.ts */
+  var CLOSED_CHROME_PX = 20;
+
   /**
    * Iframe outer size in host pixels. Keep in sync with getWidgetEmbedIframeSizePx in
    * src/utils/widget-embed-resize.utils.ts (widget posts resize when panel opens/closes).
@@ -98,8 +107,8 @@
       iw = Math.min(w + 40, vw);
       ih = Math.min(h + ls + 56, vh);
     } else {
-      iw = Math.min(ls + os + 40, vw);
-      ih = Math.min(ls + ob + 40, vh);
+      iw = Math.min(ls + os + CLOSED_CHROME_PX, vw);
+      ih = Math.min(ls + ob + CLOSED_CHROME_PX, vh);
     }
     return (
       'position:fixed;border:0;background:transparent;' +

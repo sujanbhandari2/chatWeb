@@ -1,5 +1,11 @@
 import { defaultWidgetInitConfig, type WidgetInitConfig } from '../schemas/widget.schemas';
 
+/**
+ * When the panel is closed, only the launcher is visible. Keep this small so the host iframe
+ * does not leave a large transparent hit-area over the page (must match loader `iframeBox` closed branch).
+ */
+export const WIDGET_EMBED_CLOSED_CHROME_PX = 20;
+
 /** Matches `public/healthchat-widget-loader.js` postMessage protocol. */
 export const WIDGET_EMBED_MESSAGE_SOURCE = 'healthchat-widget';
 
@@ -31,8 +37,8 @@ export function getWidgetEmbedIframeSizePx(panelOpen: boolean, config: WidgetIni
   }
 
   return {
-    width: Math.min(ls + spacing.offsetSide + 40, vw - 16),
-    height: Math.min(ls + spacing.offsetBottom + 40, vh - 16),
+    width: Math.min(ls + spacing.offsetSide + WIDGET_EMBED_CLOSED_CHROME_PX, vw - 16),
+    height: Math.min(ls + spacing.offsetBottom + WIDGET_EMBED_CLOSED_CHROME_PX, vh - 16),
   };
 }
 

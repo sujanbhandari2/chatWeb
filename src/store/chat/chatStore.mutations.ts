@@ -152,6 +152,7 @@ export function buildChatMutations(set: SetChat, get: () => ChatStore): Partial<
       get().setWidgetInboxMenuOpen(false);
       get().setWidgetRailPane(WidgetPanelType.CHATS);
       get().setSelectedConversationId('');
+      get().setMessages([]);
     },
 
     openGroupModal: () => {

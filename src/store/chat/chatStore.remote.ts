@@ -44,8 +44,12 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       if (!token) {
         return;
       }
+      const previousConversationId = get().selectedConversationId;
       get().setError('');
       get().setSelectedConversationId(conversationId);
+      if (conversationId !== previousConversationId) {
+        get().setMessages([]);
+      }
       get().setUnreadByConversation((previous) => {
         if (!previous[conversationId]) {
           return previous;

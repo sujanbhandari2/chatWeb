@@ -112,8 +112,11 @@ export function WidgetChat({ config, children, panelHeaderCenterText }: WidgetCh
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [open, interactions.closeOnClickOutside, close]);
 
-  /** Shrink host iframe when panel closes so transparent area does not block the page (loader listens). */
-  useEffect(() => {
+  /**
+   * Shrink host iframe when panel closes so transparent area does not block the page (loader listens).
+   * useLayoutEffect runs before paint so the parent can resize the iframe before the user sees a tall empty box.
+   */
+  useLayoutEffect(() => {
     const notify = (): void => {
       postWidgetEmbedResizeToParent(open, configRef.current);
     };
