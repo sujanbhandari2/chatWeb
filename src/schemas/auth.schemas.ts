@@ -2,22 +2,20 @@ import { z } from 'zod';
 
 const nameSchema = z.string().min(1).max(120);
 const emailSchema = z.string().email();
-const tenantIdSchema = z.string().max(120).optional();
+const companyIdSchema = z.string().min(1, 'Company is required').max(120);
 
-export const registerSchema = z.object({
-  tenantId: tenantIdSchema,
+/**
+ * Single user bootstrap for chat: `POST /v1/user/users` (no separate login/register APIs).
+ */
+export const provisionUserSchema = z.object({
+  companyId: companyIdSchema,
   name: nameSchema,
   email: emailSchema,
-  username: z.string().max(80).optional()
+  /** Stable id for the visitor (defaults to a persisted anonymous id in the widget). */
+  externalId: z.string().min(1).max(200)
 });
 
-export const loginSchema = z.object({
-  tenantId: tenantIdSchema,
-  email: emailSchema
-});
-
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
+export type ProvisionUserInput = z.infer<typeof provisionUserSchema>;
 
 export function formatZodError(error: z.ZodError): string {
   return error.issues.map((issue) => issue.message).join('; ') || 'Invalid input';

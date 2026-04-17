@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getResolvedApiKey } from '../lib/api-credentials';
+import { formatWireXApiKeyValue } from './chat-api-key.utils';
 import { getServerOrigin } from './runtime-endpoints.utils';
 
 export function toAbsoluteMediaUrl(url: string): string {
@@ -16,7 +17,7 @@ export async function fetchMediaBlob(url: string, token?: string): Promise<Blob>
   if (token?.trim()) {
     headers.Authorization = `Bearer ${token}`;
   } else {
-    const key = getResolvedApiKey();
+    const key = formatWireXApiKeyValue(getResolvedApiKey());
     if (key) {
       headers['X-Api-Key'] = key;
     }

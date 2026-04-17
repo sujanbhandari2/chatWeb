@@ -6,7 +6,7 @@ import { WidgetPanelType } from "../types/chat";
  * Validates that the widget configuration has a valid tenant ID
  */
 export function isValidTenantConfiguration(config: WidgetInitConfig): boolean {
-    return Boolean(config.backend?.tenantId?.trim());
+    return Boolean(config.backend?.companyId?.trim());
   }
    
   /**

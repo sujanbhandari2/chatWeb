@@ -57,7 +57,7 @@ export const exampleFullConfig: WidgetInitConfig = mergeConfig({
       headerIconUrl: '/assets/logo.svg'
     },
     backend: {
-      tenantId: 'my-company',
+      companyId: 'my-company',
       lockTenant: false,
       hideTenantField: false,
       apiUrl: 'https://api.example.com',

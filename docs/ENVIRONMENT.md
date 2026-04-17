@@ -8,6 +8,9 @@ Variables are read by Vite (`import.meta.env`). Use [`.env.example`](../.env.exa
 |----------|---------|
 | `VITE_API_URL` | REST API base (e.g. `http://localhost:4040/api`). Used when `WidgetInitConfig.backend.apiUrl` is not set by the merged profile. |
 | `VITE_SOCKET_URL` | Socket.IO origin. Used when `backend.socketUrl` is unset after merge. |
+| `VITE_WIDGET_ACCESS_KEY` | Credential material (public id, or `id:secret`, or a value that already starts with `accessKey:`). Inlined in [`widget.html`](../widget.html) and optional dev fallback in [`api-credentials.ts`](../src/lib/api-credentials.ts). Axios sends **`X-Api-Key`** as `accessKey:` plus this merged value unless it already has that prefix ([`formatWireXApiKeyValue`](../src/utils/chat-api-key.utils.ts)). |
+| `VITE_WIDGET_SECRET_KEY` | Optional **secret** half; merged with `VITE_WIDGET_ACCESS_KEY` before the `accessKey:` wire prefix is applied. |
+| `VITE_WIDGET_TENANT_ID` | Optional tenant id for `widget.html` only (`backend.tenantId`). |
 
 ## Widget profile (which preset loads first)
 

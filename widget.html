@@ -7,6 +7,23 @@
   </head>
   <body>
     <div id="root"></div>
+    <script type="module">
+      const accessKey = import.meta.env.VITE_WIDGET_ACCESS_KEY?.trim() || '';
+      const secretKey = import.meta.env.VITE_WIDGET_SECRET_KEY?.trim() || '';
+      const companyId =
+        import.meta.env.VITE_WIDGET_COMPANY_ID?.trim() ||
+        import.meta.env.VITE_WIDGET_TENANT_ID?.trim() ||
+        '';
+      if (accessKey || secretKey || companyId) {
+        window.__HEALTHCHAT_WIDGET_CONFIG__ = {
+          backend: {
+            ...(accessKey ? { accessKey } : {}),
+            ...(secretKey ? { secretKey } : {}),
+            ...(companyId ? { companyId } : {})
+          }
+        };
+      }
+    </script>
     <script type="module" src="/src/main-widget.tsx"></script>
   </body>
 </html>

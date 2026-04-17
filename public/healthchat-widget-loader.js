@@ -5,7 +5,7 @@
  * <script
  *   src="https://your-cdn/healthchat-widget-loader.js"
  *   data-widget-src="https://your-cdn/widget.html"
- *   data-config='{"tenantId":"…","lockTenant":true,"position":"right","panelWidth":400}'
+ *   data-config='{"companyId":"…","lockTenant":true,"position":"right","panelWidth":400}'
  *   async
  * ></script>
  *
@@ -48,8 +48,15 @@
   }
 
   function appendQuery(base, config) {
+    var cfg = Object.assign({}, config);
+    if (!cfg.companyId && cfg.tenantId) {
+      cfg.companyId = cfg.tenantId;
+    }
     var keys = [
-      'tenantId',
+      'companyId',
+      'accessKey',
+      'apiKey',
+      'secretKey',
       'lockTenant',
       'hideTenantField',
       'position',
@@ -71,10 +78,10 @@
     var u = new URL(base, window.location.href);
     var params = new URLSearchParams(u.search);
     keys.forEach(function (k) {
-      if (!Object.prototype.hasOwnProperty.call(config, k)) {
+      if (!Object.prototype.hasOwnProperty.call(cfg, k)) {
         return;
       }
-      var v = config[k];
+      var v = cfg[k];
       if (v === undefined || v === null || v === '') {
         return;
       }

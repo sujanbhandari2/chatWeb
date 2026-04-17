@@ -3,14 +3,12 @@ export type ConversationType = string;
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE';
 
-/** End-user profile (e.g. `POST /v1/chat/users` or session payload). */
+/** End-user profile (`POST /v1/user/users` or persisted session). */
 export interface AuthUser {
   id: string;
   name: string | null;
   email: string;
-  /** Chat API `username` when using `/v1/chat/users`. */
-  username?: string;
-  tenantId: string;
+  companyId: string;
   status: string | null;
 }
 
@@ -32,7 +30,7 @@ export interface PublicUser {
 
 export interface TenantUser {
   id: string;
-  tenantId: string;
+  companyId: string;
   name: string | null;
   email: string;
   avatarUrl: string | null;
@@ -49,7 +47,7 @@ export interface ConversationParticipant {
 
 export interface Conversation {
   id: string;
-  tenantId: string;
+  companyId: string;
   type: ConversationType;
   title: string | null;
   createdBy: string | null;
@@ -100,7 +98,7 @@ export interface Message {
   replyToMessage?: ReplyToMessage | null;
   reactions: MessageReaction[];
   /** Legacy / socket — not always present on REST payloads */
-  tenantId?: string;
+  companyId?: string;
   type?: MessageType;
   deletedAt?: string | null;
   deliveredReceipts?: DeliveredReceipt[];

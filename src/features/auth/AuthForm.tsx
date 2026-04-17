@@ -1,14 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  loginSchema,
-  registerSchema,
-  type LoginInput,
-  type RegisterInput
-} from '../../schemas/auth.schemas';
-import { useLoginMutation, useRegisterMutation } from '../../services/auth.service';
+import { provisionUserSchema, type ProvisionUserInput } from '../../schemas/auth.schemas';
+import { useProvisionUserMutation } from '../../services/auth.service';
 import type { WidgetInitConfig } from '../../schemas/widget.schemas';
+import { WIDGET_EXTERNAL_ID_STORAGE_KEY } from '../../constants/session.constants';
 
 export type AuthFormProps = {
   widgetMode?: boolean;
@@ -20,181 +16,91 @@ function authErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
   }
-  return 'Authentication failed';
+  return 'Could not start chat';
 }
 
-function RegisterFields({
-  defaultTenantId,
-  hideTenant,
-  lockTenant,
-  disabled
-}: {
-  defaultTenantId: string;
-  hideTenant: boolean;
-  lockTenant: boolean;
-  disabled: boolean;
-}): JSX.Element {
-  const mutation = useRegisterMutation();
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors }
-  } = useForm<RegisterInput>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { tenantId: defaultTenantId, name: '', email: '', username: '' }
-  });
-
-  useEffect(() => {
-    reset((prev) => ({ ...prev, tenantId: defaultTenantId }));
-  }, [defaultTenantId, reset]);
-
-  return (
-    <form
-      className="auth-form"
-      onSubmit={handleSubmit(async (data) => {
-        try {
-          await mutation.mutateAsync(data);
-        } catch {
-          /* mutation.error below */
-        }
-      })}
-    >
-      {hideTenant ? (
-        <input type="hidden" {...register('tenantId')} />
-      ) : (
-        <input
-          {...register('tenantId')}
-          placeholder="Tenant ID"
-          required
-          disabled={disabled}
-          readOnly={lockTenant}
-        />
-      )}
-      {errors.tenantId && <p className="error-banner">{errors.tenantId.message}</p>}
-      <input {...register('name')} placeholder="Name" required maxLength={120} disabled={disabled} />
-      {errors.name && <p className="error-banner">{errors.name.message}</p>}
-      <input
-        {...register('username')}
-        placeholder="Username (optional)"
-        maxLength={80}
-        disabled={disabled}
-      />
-      {errors.username && <p className="error-banner">{errors.username.message}</p>}
-      <input {...register('email')} placeholder="Email" type="email" required disabled={disabled} />
-      {errors.email && <p className="error-banner">{errors.email.message}</p>}
-      <button type="submit" disabled={disabled || mutation.isPending}>
-        {mutation.isPending ? 'Creating account...' : 'Create account'}
-      </button>
-      {mutation.isError && <p className="error-banner">{authErrorMessage(mutation.error)}</p>}
-    </form>
-  );
-}
-
-function LoginFields({
-  defaultTenantId,
-  hideTenant,
-  lockTenant,
-  disabled
-}: {
-  defaultTenantId: string;
-  hideTenant: boolean;
-  lockTenant: boolean;
-  disabled: boolean;
-}): JSX.Element {
-  const mutation = useLoginMutation();
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors }
-  } = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { tenantId: defaultTenantId, email: '' }
-  });
-
-  useEffect(() => {
-    reset((prev) => ({ ...prev, tenantId: defaultTenantId }));
-  }, [defaultTenantId, reset]);
-
-  return (
-    <form
-      className="auth-form"
-      onSubmit={handleSubmit(async (data) => {
-        try {
-          await mutation.mutateAsync(data);
-        } catch {
-          /* mutation.error below */
-        }
-      })}
-    >
-      {hideTenant ? (
-        <input type="hidden" {...register('tenantId')} />
-      ) : (
-        <input
-          {...register('tenantId')}
-          placeholder="Tenant ID (UUID)"
-          required
-          disabled={disabled}
-          readOnly={lockTenant}
-        />
-      )}
-      {errors.tenantId && <p className="error-banner">{errors.tenantId.message}</p>}
-      <input {...register('email')} placeholder="Email" type="email" required disabled={disabled} />
-      {errors.email && <p className="error-banner">{errors.email.message}</p>}
-      <button type="submit" disabled={disabled || mutation.isPending}>
-        {mutation.isPending ? 'Signing in...' : 'Login'}
-      </button>
-      {mutation.isError && <p className="error-banner">{authErrorMessage(mutation.error)}</p>}
-    </form>
-  );
+function getOrCreateWidgetExternalId(): string {
+  try {
+    const existing = window.localStorage.getItem(WIDGET_EXTERNAL_ID_STORAGE_KEY);
+    if (existing?.trim()) {
+      return existing.trim();
+    }
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `ext_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    window.localStorage.setItem(WIDGET_EXTERNAL_ID_STORAGE_KEY, id);
+    return id;
+  } catch {
+    return `ext_${Date.now()}`;
+  }
 }
 
 export function AuthForm({ widgetMode = false, widgetConfig, widgetMissingTenant }: AuthFormProps): JSX.Element {
-  const [mode, setMode] = useState<'register' | 'login'>('register');
+  const mutation = useProvisionUserMutation();
   const hideTenant = Boolean(widgetMode && widgetConfig?.backend?.hideTenantField);
   const lockTenant = Boolean(
     widgetMode && (widgetConfig?.backend?.lockTenant || widgetConfig?.backend?.hideTenantField)
   );
-  const defaultTenantId =
-    widgetMode && widgetConfig?.backend?.tenantId?.trim() ? widgetConfig.backend.tenantId.trim() : '';
+  const defaultCompanyId =
+    widgetMode && widgetConfig?.backend?.companyId?.trim() ? widgetConfig.backend.companyId.trim() : '';
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors }
+  } = useForm<ProvisionUserInput>({
+    resolver: zodResolver(provisionUserSchema),
+    defaultValues: {
+      companyId: defaultCompanyId,
+      name: '',
+      email: '',
+      externalId: getOrCreateWidgetExternalId()
+    }
+  });
+
+  useEffect(() => {
+    reset((prev) => ({
+      ...prev,
+      companyId: defaultCompanyId,
+      externalId: prev.externalId?.trim() || getOrCreateWidgetExternalId()
+    }));
+  }, [defaultCompanyId, reset]);
 
   return (
-    <>
-      <div className="auth-mode-switch">
-        <button
-          className={mode === 'register' ? 'active' : ''}
-          onClick={() => setMode('register')}
-          type="button"
-          disabled={widgetMissingTenant}
-        >
-          Register
-        </button>
-        <button
-          className={mode === 'login' ? 'active' : ''}
-          onClick={() => setMode('login')}
-          type="button"
-          disabled={widgetMissingTenant}
-        >
-          Login
-        </button>
-      </div>
-
-      {mode === 'register' ? (
-        <RegisterFields
-          defaultTenantId={defaultTenantId}
-          hideTenant={hideTenant}
-          lockTenant={lockTenant}
-          disabled={widgetMissingTenant}
-        />
+    <form
+      className="auth-form"
+      onSubmit={handleSubmit(async (data) => {
+        try {
+          await mutation.mutateAsync(data);
+        } catch {
+          /* mutation.error below */
+        }
+      })}
+    >
+      {hideTenant ? (
+        <input type="hidden" {...register('companyId')} />
       ) : (
-        <LoginFields
-          defaultTenantId={defaultTenantId}
-          hideTenant={hideTenant}
-          lockTenant={lockTenant}
+        <input
+          {...register('companyId')}
+          placeholder="Company ID"
+          required
           disabled={widgetMissingTenant}
+          readOnly={lockTenant}
         />
       )}
-    </>
+      {errors.companyId && <p className="error-banner">{errors.companyId.message}</p>}
+      <input {...register('name')} placeholder="Name" required maxLength={120} disabled={widgetMissingTenant} />
+      {errors.name && <p className="error-banner">{errors.name.message}</p>}
+      <input {...register('email')} placeholder="Email" type="email" required disabled={widgetMissingTenant} />
+      {errors.email && <p className="error-banner">{errors.email.message}</p>}
+      <input type="hidden" {...register('externalId')} />
+      {errors.externalId && <p className="error-banner">{errors.externalId.message}</p>}
+      <button type="submit" disabled={widgetMissingTenant || mutation.isPending}>
+        {mutation.isPending ? 'Starting…' : 'Open chat'}
+      </button>
+      {mutation.isError && <p className="error-banner">{authErrorMessage(mutation.error)}</p>}
+    </form>
   );
 }

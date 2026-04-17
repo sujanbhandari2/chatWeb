@@ -23,11 +23,11 @@ export const createAdminClient = (body: CreateAdminClientBody): Promise<unknown>
 
 export const deleteAdminClient = (id: string): Promise<unknown> => apiService.delete<unknown>(clientBase(id));
 
-export const listAdminClientApiKeys = (clientId: string): Promise<unknown> =>
-  apiService.get<unknown>(`${clientBase(clientId)}/api-keys`);
+export const listAdminClientApiKeys = (userId: string): Promise<unknown> =>
+  apiService.get<unknown>(`${clientBase(userId)}/api-keys`);
 
-export const createAdminClientApiKey = (clientId: string, body: CreateAdminApiKeyBody): Promise<unknown> =>
-  apiService.post<unknown>(`${clientBase(clientId)}/api-keys`, body);
+export const createAdminClientApiKey = (userId: string, body: CreateAdminApiKeyBody): Promise<unknown> =>
+  apiService.post<unknown>(`${clientBase(userId)}/api-keys`, body);
 
-export const revokeAdminClientApiKey = (clientId: string, keyId: string): Promise<unknown> =>
-  apiService.post<unknown>(`${clientBase(clientId)}/api-keys/${encodeURIComponent(keyId)}/revoke`, {});
+export const revokeAdminClientApiKey = (userId: string, keyId: string): Promise<unknown> =>
+  apiService.post<unknown>(`${clientBase(userId)}/api-keys/${encodeURIComponent(keyId)}/revoke`, {});

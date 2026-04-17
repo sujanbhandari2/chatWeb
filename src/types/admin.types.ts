@@ -10,6 +10,10 @@ export interface AdminApiKeyRow {
   scopes?: string[];
   expiresAt?: string | null;
   revokedAt?: string | null;
+  /** Full key when the list endpoint returns it (uncommon). */
+  accessKey?: string | null;
+  /** Masked / prefix hint from the API (e.g. `sk_live_…abcd`). */
+  keyPreview?: string | null;
 }
 
 /** Plaintext key material — only present on create. */
@@ -85,22 +89,34 @@ export function parseAdminApiKeyRow(raw: unknown): AdminApiKeyRow | null {
     return null;
   }
   const scopes = o.scopes;
+  const accessRaw = o.accessKey ?? o.access_key ?? o.key ?? o.secret ?? o.token ?? o.apiKey;
+  const accessKey =
+    typeof accessRaw === 'string' && accessRaw.trim() !== '' ? accessRaw.trim() : null;
+  const previewRaw =
+    o.keyPreview ?? o.key_preview ?? o.keyPrefix ?? o.prefix ?? o.maskedKey ?? o.masked_key;
+  const keyPreview =
+    typeof previewRaw === 'string' && previewRaw.trim() !== '' ? previewRaw.trim() : null;
   return {
     id,
     name: o.name != null ? String(o.name) : null,
     expiresAt: o.expiresAt != null ? String(o.expiresAt) : o.expires_at != null ? String(o.expires_at) : null,
     revokedAt: o.revokedAt != null ? String(o.revokedAt) : o.revoked_at != null ? String(o.revoked_at) : null,
-    scopes: Array.isArray(scopes) ? scopes.filter((s): s is string => typeof s === 'string') : undefined
+    scopes: Array.isArray(scopes) ? scopes.filter((s): s is string => typeof s === 'string') : undefined,
+    accessKey,
+    keyPreview
   };
 }
 
-export function pickApiKeyPlaintext(payload: unknown): string | undefined {
-  if (!payload || typeof payload !== 'object') {
-    return undefined;
+/** Row + id from POST create key response (root or `{ data }`). */
+export function parseAdminApiKeyFromCreateResponse(res: unknown): AdminApiKeyRow | null {
+  const direct = parseAdminApiKeyRow(res);
+  if (direct) {
+    return direct;
   }
-  const o = payload as Record<string, unknown>;
-  const k = o.key ?? o.secret ?? o.token ?? o.apiKey;
-  return typeof k === 'string' && k.trim() !== '' ? k.trim() : undefined;
+  if (res && typeof res === 'object' && 'data' in res) {
+    return parseAdminApiKeyRow((res as { data: unknown }).data);
+  }
+  return null;
 }
 
 export function unwrapAdminList<T>(raw: unknown, parse: (item: unknown) => T | null): T[] {

@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { AdminRoutes } from '../../constants/admin.constants';
+import { WIDGET_PUBLIC_PATHS } from '../../constants/widget.constants';
 import { useAdminProfileQuery } from '../../services/admin.service';
 import { useAdminAuthStore } from '../../store/useAdminAuthStore';
 import './admin-shell.css';
@@ -25,6 +26,7 @@ export function AdminLayout(): JSX.Element {
         <p className="admin-shell__tag">Console</p>
         <nav className="admin-shell__nav">
           <NavLink to={AdminRoutes.CLIENTS}>Clients</NavLink>
+          <NavLink to={WIDGET_PUBLIC_PATHS.EMBED_DOCS}>Widget embed guide</NavLink>
         </nav>
         <div className="admin-shell__sidebar-footer">
           {email ? <div style={{ color: '#94a3b8', marginBottom: '0.35rem' }}>{email}</div> : null}

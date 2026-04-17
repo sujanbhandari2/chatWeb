@@ -115,7 +115,7 @@ export function AdminClientsView(): JSX.Element {
                   <td>{c.name}</td>
                   <td>{c.email}</td>
                   <td>
-                    <Link to={AdminRoutes.clientKeys(c.id)} state={{ name: c.name, email: c.email }}>
+                    <Link to={AdminRoutes.userKeys(c.id)} state={{ name: c.name, email: c.email }}>
                       API keys
                     </Link>
                   </td>

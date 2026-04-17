@@ -20,8 +20,17 @@ export const useAuthStore = create<AuthState>((set) => ({
       const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as { token?: string; user?: AuthUser };
-        if (parsed?.token && parsed?.user) {
-          set({ token: parsed.token, user: parsed.user, sessionHydrated: true });
+        if (parsed?.user) {
+          const t = typeof parsed.token === 'string' ? parsed.token : '';
+          const raw = parsed.user as AuthUser & { tenantId?: string };
+          const user: AuthUser = {
+            id: raw.id,
+            name: raw.name,
+            email: raw.email,
+            companyId: raw.companyId ?? raw.tenantId ?? '',
+            status: raw.status
+          };
+          set({ token: t, user, sessionHydrated: true });
           return;
         }
       }

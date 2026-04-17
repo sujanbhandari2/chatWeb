@@ -1,7 +1,7 @@
-import type { AxiosRequestConfig } from 'axios';
 import { API_PATHS } from '../constants/api.constant';
 import { apiService } from '../lib/api-service';
 import type { Conversation, Message, MessagesPage } from '../types/chat';
+import { normalizeMessage } from '../utils/chat.utils';
 
 function unwrapArray<T>(raw: unknown): T[] {
   if (Array.isArray(raw)) {
@@ -11,6 +11,18 @@ function unwrapArray<T>(raw: unknown): T[] {
     return (raw as { data: T[] }).data;
   }
   return [];
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+function normalizeConversationFromApi(raw: unknown): Conversation {
+  if (!isRecord(raw)) {
+    return raw as Conversation;
+  }
+  const companyId = String(raw.companyId ?? raw.company_id ?? raw.tenantId ?? raw.tenant_id ?? '');
+  return { ...(raw as unknown as Conversation), companyId };
 }
 
 function conversationMessagesPath(conversationId: string): string {
@@ -24,10 +36,10 @@ function conversationParticipantsPath(conversationId: string): string {
 export const listConversations = (forUserId: string): Promise<Conversation[]> =>
   apiService
     .get<unknown>(`${API_PATHS.CHAT.CONVERSATIONS}?${new URLSearchParams({ forUserId })}`)
-    .then((raw) => unwrapArray<Conversation>(raw));
+    .then((raw) => unwrapArray<unknown>(raw).map(normalizeConversationFromApi));
 
 export const createConversation = (body: { isGlobal?: boolean } = {}): Promise<Conversation> =>
-  apiService.post<Conversation>(API_PATHS.CHAT.CONVERSATIONS, body);
+  apiService.post<unknown>(API_PATHS.CHAT.CONVERSATIONS, body).then(normalizeConversationFromApi);
 
 export const addConversationParticipant = (conversationId: string, userId: string): Promise<unknown> =>
   apiService.post(conversationParticipantsPath(conversationId), { userId });
@@ -39,10 +51,9 @@ export const updateConversationById = (
   conversationId: string,
   body: { title: string }
 ): Promise<Conversation> =>
-  apiService.patch<Conversation>(
-    `${API_PATHS.CHAT.CONVERSATIONS}/${encodeURIComponent(conversationId)}`,
-    body
-  );
+  apiService
+    .patch<unknown>(`${API_PATHS.CHAT.CONVERSATIONS}/${encodeURIComponent(conversationId)}`, body)
+    .then(normalizeConversationFromApi);
 
 export const addConversationParticipants = async (
   conversationId: string,
@@ -73,7 +84,12 @@ export const getMessagesPage = (conversationId: string, page = 1, pageSize = 50)
     page: String(page),
     pageSize: String(Math.min(Math.max(pageSize, 1), 100))
   });
-  return apiService.get<MessagesPage>(`${conversationMessagesPath(conversationId)}?${query}`);
+  return apiService
+    .get<MessagesPage>(`${conversationMessagesPath(conversationId)}?${query}`)
+    .then((page) => ({
+      ...page,
+      data: page.data.map((m) => normalizeMessage(m))
+    }));
 };
 
 export const postRestMessage = (conversationId: string, body: { type: string; content: string; senderId: string }) =>
@@ -136,20 +152,6 @@ export async function createGroupConversation(
   const list = await listConversations(primary);
   return list.find((c) => c.id === convId) ?? created;
 }
-
-export type ChatUserRole = 'CLIENT' | 'AGENT' | 'ADMIN';
-
-export type CreateChatUserBody = {
-  role: ChatUserRole;
-  email: string;
-  username: string;
-  name?: string;
-};
-
-export const createChatUser = (
-  body: CreateChatUserBody,
-  config?: AxiosRequestConfig
-): Promise<unknown> => apiService.post<unknown>(API_PATHS.CHAT.USERS, body, config);
 
 export const listChatUsers = (): Promise<unknown[]> =>
   apiService.get<unknown>(API_PATHS.CHAT.USERS).then((raw) => {

@@ -31,6 +31,8 @@ export function getMessageType(message: Message): MessageType {
 }
 
 export function normalizeMessage(message: Message): Message {
+  const legacy = message as Message & { tenantId?: string };
+  const companyId = message.companyId ?? legacy.tenantId;
   const raw = message.reactions ?? [];
   const reactions: MessageReaction[] = raw.map((r) => {
     const legacyEmoji = (r as MessageReaction & { reactionType?: string }).reactionType;
@@ -50,6 +52,7 @@ export function normalizeMessage(message: Message): Message {
   });
   return {
     ...message,
+    ...(companyId !== undefined ? { companyId } : {}),
     reactions,
     attachments: message.attachments ?? []
   };

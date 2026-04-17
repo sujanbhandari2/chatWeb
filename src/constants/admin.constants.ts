@@ -8,5 +8,5 @@ export const AdminRoutes = {
   LOGIN: '/admin/login',
   HOME: '/admin',
   CLIENTS: '/admin/clients',
-  clientKeys: (clientId: string) => `/admin/clients/${encodeURIComponent(clientId)}/keys`
+  userKeys: (userId: string) => `/admin/clients/${encodeURIComponent(userId)}/keys`
 } as const;

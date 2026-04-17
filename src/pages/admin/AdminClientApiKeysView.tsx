@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useLocation, useParams } from 'react-router-dom';
+import { toast } from '../../common/ui/Toaster';
 import { AdminRoutes } from '../../constants/admin.constants';
 import {
   createAdminApiKeySchema,
@@ -13,23 +14,41 @@ import {
   useRevokeAdminClientApiKeyMutation
 } from '../../services/admin.service';
 import {
+  parseAdminApiKeyFromCreateResponse,
   parseAdminApiKeyRow,
-  pickApiKeyPlaintext,
   unwrapAdminList
 } from '../../types/admin.types';
+import { parseAdminCreateApiKeyHeaderValue } from '../../utils/chat-api-key.utils';
 import type { AdminApiKeyRow } from '../../types/admin.types';
+import { copyTextToClipboard } from '../../utils/clipboard.utils';
 
 type LocationState = { name?: string; email?: string };
 
+function shortenForList(value: string, head = 14, tail = 10): string {
+  if (value.length <= head + tail + 3) {
+    return value;
+  }
+  return `${value.slice(0, head)}…${value.slice(-tail)}`;
+}
+
+async function copyWithToast(label: string, text: string): Promise<void> {
+  try {
+    await copyTextToClipboard(text);
+    toast(`${label} copied to clipboard`);
+  } catch {
+    toast('Copy failed — check browser permissions');
+  }
+}
+
 export function AdminClientApiKeysView(): JSX.Element {
-  const { clientId = '' } = useParams<{ clientId: string }>();
+  const { userId = '' } = useParams<{ userId: string }>();
   const location = useLocation();
   const state = (location.state ?? {}) as LocationState;
-  const title = state.name?.trim() || `Client ${clientId}`;
+  const title = state.name?.trim() || `User ${userId}`;
 
-  const { data, isLoading, isError } = useAdminClientApiKeysQuery(clientId);
-  const createMut = useCreateAdminClientApiKeyMutation(clientId);
-  const revokeMut = useRevokeAdminClientApiKeyMutation(clientId);
+  const { data, isLoading, isError } = useAdminClientApiKeysQuery(userId);
+  const createMut = useCreateAdminClientApiKeyMutation(userId);
+  const revokeMut = useRevokeAdminClientApiKeyMutation(userId);
 
   const rows = useMemo(
     () => unwrapAdminList<AdminApiKeyRow>(data ?? [], parseAdminApiKeyRow),
@@ -37,6 +56,8 @@ export function AdminClientApiKeysView(): JSX.Element {
   );
 
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
+  /** Plaintext secrets only known right after create (server list usually omits them). */
+  const [rowSecrets, setRowSecrets] = useState<Record<string, string>>({});
 
   const {
     register,
@@ -73,9 +94,13 @@ export function AdminClientApiKeysView(): JSX.Element {
               scopes: scopes && scopes.length > 0 ? scopes : undefined,
               expiresAt: values.expiresAt?.trim() || undefined
             });
-            const secret = pickApiKeyPlaintext(res);
-            if (secret) {
-              setRevealedSecret(secret);
+            const headerValue = parseAdminCreateApiKeyHeaderValue(res);
+            const createdRow = parseAdminApiKeyFromCreateResponse(res);
+            if (headerValue) {
+              setRevealedSecret(headerValue);
+              if (createdRow?.id) {
+                setRowSecrets((prev) => ({ ...prev, [createdRow.id]: headerValue }));
+              }
             }
             reset({ name: '', scopesText: '', expiresAt: '' });
           })}
@@ -92,9 +117,11 @@ export function AdminClientApiKeysView(): JSX.Element {
 
       {revealedSecret ? (
         <div className="admin-panel" style={{ border: '2px solid #2563eb' }}>
-          <h2>Copy this secret now</h2>
+          <h2>Copy this credential now</h2>
           <p className="admin-shell__muted" style={{ marginTop: 0 }}>
-            It will not be shown again. Store it in your secrets manager.
+            Store this credential; the web client sends{' '}
+            <code style={{ fontSize: '0.9em' }}>X-Api-Key: accessKey:</code> plus the id:secret below. This value will
+            not be shown again—store it in your secrets manager.
           </p>
           <pre
             style={{
@@ -108,9 +135,18 @@ export function AdminClientApiKeysView(): JSX.Element {
           >
             {revealedSecret}
           </pre>
-          <button type="button" className="admin-btn-ghost" onClick={() => setRevealedSecret(null)}>
-            Dismiss
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+            <button
+              type="button"
+              className="admin-btn-ghost"
+              onClick={() => void copyWithToast('X-Api-Key value', revealedSecret)}
+            >
+              Copy X-Api-Key value
+            </button>
+            <button type="button" className="admin-btn-ghost" onClick={() => setRevealedSecret(null)}>
+              Dismiss
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -132,18 +168,56 @@ export function AdminClientApiKeysView(): JSX.Element {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Credential</th>
                 <th>Scopes</th>
                 <th>Expires</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.map((row) => {
+                const secret = rowSecrets[row.id] ?? row.accessKey ?? null;
+                const preview = row.keyPreview ?? null;
+                const copyValue = secret ?? preview;
+                const display = secret
+                  ? shortenForList(secret)
+                  : preview
+                    ? shortenForList(preview, 24, 12)
+                    : '—';
+
+                return (
                 <tr key={row.id}>
                   <td>{row.name ?? '—'}</td>
+                  <td>
+                    <code
+                      style={{
+                        fontSize: '0.82rem',
+                        background: '#f1f5f9',
+                        padding: '0.2rem 0.4rem',
+                        borderRadius: 4,
+                        wordBreak: 'break-all'
+                      }}
+                    >
+                      {display}
+                    </code>
+                  </td>
                   <td>{row.scopes?.join(', ') || '—'}</td>
                   <td>{row.expiresAt ?? '—'}</td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      className="admin-btn-ghost"
+                      style={{ marginRight: '0.35rem' }}
+                      disabled={!copyValue}
+                      title={copyValue ?? undefined}
+                      onClick={() => {
+                        if (copyValue) {
+                          void copyWithToast('X-Api-Key value', copyValue);
+                        }
+                      }}
+                    >
+                      Copy
+                    </button>
                     {row.revokedAt ? (
                       <span style={{ color: '#64748b' }}>Revoked</span>
                     ) : (
@@ -155,7 +229,14 @@ export function AdminClientApiKeysView(): JSX.Element {
                           if (!window.confirm('Revoke this API key?')) {
                             return;
                           }
-                          void revokeMut.mutateAsync(row.id);
+                          void (async (): Promise<void> => {
+                            await revokeMut.mutateAsync(row.id);
+                            setRowSecrets((prev) => {
+                              const next = { ...prev };
+                              delete next[row.id];
+                              return next;
+                            });
+                          })();
                         }}
                       >
                         Revoke
@@ -163,7 +244,7 @@ export function AdminClientApiKeysView(): JSX.Element {
                     )}
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         ) : null}

@@ -16,7 +16,7 @@ import { pickBearerToken } from '../types/admin.types';
 export const adminKeys = {
   all: ['admin'] as const,
   profile: () => [...adminKeys.all, 'profile'] as const,
-  clientKeys: (clientId: string) => [...adminKeys.all, 'api-keys', clientId] as const
+  userKeys: (userId: string) => [...adminKeys.all, 'api-keys', userId] as const
 };
 
 function toastApiError(err: unknown): void {
@@ -60,30 +60,30 @@ export const useDeleteAdminClientMutation = () =>
     onError: toastApiError
   });
 
-export const useAdminClientApiKeysQuery = (clientId: string) => {
+export const useAdminClientApiKeysQuery = (userId: string) => {
   const token = useAdminAuthStore((s) => s.token);
   return useQuery({
-    queryKey: adminKeys.clientKeys(clientId),
-    queryFn: () => listAdminClientApiKeys(clientId),
-    enabled: Boolean(token?.trim() && clientId)
+    queryKey: adminKeys.userKeys(userId),
+    queryFn: () => listAdminClientApiKeys(userId),
+    enabled: Boolean(token?.trim() && userId)
   });
 };
 
-export const useCreateAdminClientApiKeyMutation = (clientId: string) => {
+export const useCreateAdminClientApiKeyMutation = (userId: string) => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: Parameters<typeof createAdminClientApiKey>[1]) =>
-      createAdminClientApiKey(clientId, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.clientKeys(clientId) }),
+      createAdminClientApiKey(userId, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.userKeys(userId) }),
     onError: toastApiError
   });
 };
 
-export const useRevokeAdminClientApiKeyMutation = (clientId: string) => {
+export const useRevokeAdminClientApiKeyMutation = (userId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (keyId: string) => revokeAdminClientApiKey(clientId, keyId),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.clientKeys(clientId) }),
+    mutationFn: (keyId: string) => revokeAdminClientApiKey(userId, keyId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.userKeys(userId) }),
     onError: toastApiError
   });
 };

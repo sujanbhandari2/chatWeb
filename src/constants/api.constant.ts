@@ -3,7 +3,7 @@
  * OpenAPI servers use `/api/v1/...`; with base `…/api` these are `/v1/...`.
  */
 export const API_PATHS = {
-  /** Client app (JWT + optional API key / tenant on some routes). */
+  /** Client app (JWT + optional API key / company scope on some routes). */
   CLIENT: {
     LOGIN: '/v1/auth/client/login',
     HEALTH: '/v1/system/health',
@@ -11,7 +11,7 @@ export const API_PATHS = {
     SHARED_ME: '/v1/shared/me',
     SHARED_API_KEYS: '/v1/shared/api-keys'
   },
-  /** Chat (bearer or `X-Api-Key`, optional `X-Tenant-Id`). */
+  /** Chat (bearer or `X-Api-Key`, optional `X-Company-Id`). */
   CHAT: {
     TENANTS: '/v1/chat/tenants',
     USERS: '/v1/chat/users',

@@ -1,5 +1,18 @@
+import { API_PATHS } from '../constants/api.constant';
+import { apiService } from '../lib/api-service';
 import { listChatUsers } from './chat.api';
 import type { TenantUser } from '../types/chat';
+
+export type CreateClientUserBody = {
+  companyId: string;
+  email: string;
+  name: string;
+  externalId: string;
+};
+
+/** POST `/v1/user/users` — creates or resolves the end-user for chat (OpenAPI). */
+export const createClientUser = (body: CreateClientUserBody): Promise<unknown> =>
+  apiService.post<unknown>(API_PATHS.CLIENT.USERS, body);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -9,7 +22,7 @@ function mapChatUserToTenantUser(u: Record<string, unknown>): TenantUser {
   const id = String(u.id ?? '');
   return {
     id,
-    tenantId: String(u.tenantId ?? u.tenant_id ?? ''),
+    companyId: String(u.companyId ?? u.company_id ?? u.tenantId ?? u.tenant_id ?? ''),
     name: u.name != null ? String(u.name) : null,
     email: String(u.email ?? ''),
     avatarUrl: u.avatarUrl != null ? String(u.avatarUrl) : null,

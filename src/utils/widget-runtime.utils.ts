@@ -5,8 +5,9 @@
  *
  * **Merge order** (each step overrides the previous): `getWidgetProfilePartial()` from
  * `config/widget.config.ts` → `window.__HEALTHCHAT_WIDGET_CONFIG__` → URL search params
- * (`parseWidgetConfigFromSearchParams`). **Embedders may set** on `backend`: `tenantId`,
- * `lockTenant`, `hideTenantField`, and **`accessKey` / `apiKey`** (sent as `X-Api-Key`; required
+ * (`parseWidgetConfigFromSearchParams`). **Embedders may set** on `backend`: `companyId`
+ * (legacy: `tenantId`), `lockTenant`, `hideTenantField`, and **`accessKey` / `apiKey`** plus optional **`secretKey`**
+ * (sent as `X-Api-Key` = `accessKey:secretKey` when both halves are set; required
  * for the chat widget to load — see `docs/WIDGET_WEBSITE.md`). **API URLs, sockets, timeouts, and
  * other `backend` keys** come from your built profile unless also allowed above. **Branding / typography / a11y /
  * styling (e.g. `classPrefix`), `features`, and `app`** from window/URL are stripped. **Colors** from the URL are ignored in **production**; in **dev**,
@@ -29,6 +30,7 @@ import {
 } from '../schemas/widget.schemas';
 import { applyRuntimeApiOverrides } from './runtime-endpoints.utils';
 import { setRuntimeApiCredentials } from '../lib/api-credentials';
+import { resolveXApiKeyHeaderValue } from './chat-api-key.utils';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -87,11 +89,30 @@ const str = (v: unknown): Str => (typeof v === 'string' ? v : undefined);
 const num = (v: unknown): Num => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
 const bool = (v: unknown): Bool => (typeof v === 'boolean' ? v : undefined);
 
+/** After deep-merge, fold legacy `tenantId` into `companyId` so final Zod parse keeps routing. */
+function normalizeMergedBackendSection(
+  backend: DeepPartialWidgetConfig['backend'] | undefined
+): DeepPartialWidgetConfig['backend'] | undefined {
+  if (!backend || typeof backend !== 'object') {
+    return backend;
+  }
+  const b = { ...(backend as Record<string, unknown>) };
+  const hasCo = b.companyId != null && String(b.companyId).trim() !== '';
+  if (!hasCo && b.tenantId != null && String(b.tenantId).trim() !== '') {
+    b.companyId = String(b.tenantId).trim();
+  }
+  delete b.tenantId;
+  return b as DeepPartialWidgetConfig['backend'];
+}
+
 export function legacyFlatToPartialConfig(flat: Record<string, unknown>): DeepPartialWidgetConfig {
   const apiFromFlat = str(flat.apiKey) ?? str(flat.accessKey);
+  const secretFromFlat = str(flat.secretKey);
   const backend = pickDefined({
-    tenantId: str(flat.tenantId),
+    companyId: str(flat.companyId) ?? str(flat.tenantId),
     apiKey: apiFromFlat !== undefined && apiFromFlat.trim() !== '' ? apiFromFlat.trim() : undefined,
+    secretKey:
+      secretFromFlat !== undefined && secretFromFlat.trim() !== '' ? secretFromFlat.trim() : undefined,
     lockTenant: bool(flat.lockTenant),
     hideTenantField: bool(flat.hideTenantField)
   });
@@ -179,7 +200,7 @@ export function mergeWidgetPartials(...partials: DeepPartialWidgetConfig[]): Dee
   return partials.reduce<DeepPartialWidgetConfig>((acc, p) => ({
     ...acc,
     ...p,
-    backend:     mergeSection(acc.backend,     p.backend),
+    backend:     normalizeMergedBackendSection(mergeSection(acc.backend, p.backend)),
     colors:      mergeSection(acc.colors,      p.colors,      ['text', 'status']),
     typography:  mergeSection(acc.typography,  p.typography,  ['fontSize', 'fontWeight']),
     spacing:     mergeSection(acc.spacing,     p.spacing),
@@ -210,9 +231,10 @@ export function parseWidgetConfigFromSearchParams(
   const position = get('position');
 
   const flat: Record<string, unknown> = pickDefined({
-    tenantId:           get('tenantId') ?? get('tenant') ?? undefined,
+    companyId:          get('companyId') ?? get('tenantId') ?? get('tenant') ?? undefined,
     accessKey:          get('accessKey') ?? undefined,
     apiKey:             get('apiKey') ?? undefined,
+    secretKey:          get('secretKey') ?? undefined,
     lockTenant:         parseBool(get('lockTenant')),
     hideTenantField:    parseBool(get('hideTenantField')),
     position:           position && LAUNCHER_POSITIONS.has(position as never) ? position : undefined,
@@ -259,9 +281,24 @@ function readWindowPartial(): DeepPartialWidgetConfig {
   return stripClientWidgetOverrides(normalizeEmbedObject(window.__HEALTHCHAT_WIDGET_CONFIG__));
 }
 
+/** Map legacy `backend.tenantId` → `companyId` before Zod parse (unknown keys are stripped). */
+function migrateBackendTenantToCompanyInPlace(root: Record<string, unknown>): void {
+  const b = root.backend;
+  if (!b || typeof b !== 'object' || Array.isArray(b)) {
+    return;
+  }
+  const bk = b as Record<string, unknown>;
+  const hasCompany = bk.companyId != null && String(bk.companyId).trim() !== '';
+  if (!hasCompany && bk.tenantId != null && String(bk.tenantId).trim() !== '') {
+    bk.companyId = String(bk.tenantId).trim();
+  }
+  delete bk.tenantId;
+}
+
 function normalizeEmbedObject(raw: unknown): DeepPartialWidgetConfig {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  const o = raw as Record<string, unknown>;
+  const o = { ...(raw as Record<string, unknown>) };
+  migrateBackendTenantToCompanyInPlace(o);
   if (isNestedConfig(o)) {
     const parsed = partialWidgetSchema.safeParse(o);
     if (!parsed.success) {
@@ -314,8 +351,12 @@ export function applyWidgetRuntimeFromConfig(config: WidgetInitConfig): void {
     apiTimeout: b?.apiTimeout
   });
   setRuntimeApiCredentials({
-    apiKey: b?.apiKey?.trim() || b?.accessKey?.trim(),
-    tenantId: b?.tenantId
+    apiKey: resolveXApiKeyHeaderValue({
+      accessKey: b?.accessKey,
+      apiKey: b?.apiKey,
+      secretKey: b?.secretKey
+    }),
+    companyId: b?.companyId
   });
 }
 
@@ -325,10 +366,11 @@ export function applyWidgetRuntimeFromConfig(config: WidgetInitConfig): void {
 
 type Scalar = string | number | boolean;
 
-/** Query keys safe for third-party embeds: tenant routing + layout + interaction (not API/branding). */
+/** Query keys safe for third-party embeds: company routing + layout + interaction (not API/branding). */
 const IFRAME_PARAM_MAP: Array<[string, (c: WidgetInitConfig) => Scalar | undefined]> = [
-  ['tenantId', (c) => c.backend?.tenantId],
+  ['companyId', (c) => c.backend?.companyId],
   ['accessKey', (c) => c.backend?.accessKey ?? c.backend?.apiKey],
+  ['secretKey', (c) => c.backend?.secretKey],
   ['lockTenant', (c) => c.backend?.lockTenant],
   ['hideTenantField', (c) => c.backend?.hideTenantField],
   ['position', (c) => c.launcher?.position],
@@ -441,7 +483,7 @@ const CLIENT_VENDOR_TOP_KEYS = [
   'debug'
 ] as const satisfies readonly (keyof DeepPartialWidgetConfig)[];
 
-/** From window/URL `backend`, keep only tenant-facing fields; API sockets/timeouts stay profile-only. */
+/** From window/URL `backend`, keep only company-facing fields; API sockets/timeouts stay profile-only. */
 function sanitizeEmbedderBackendPartial(
   backend: unknown
 ): DeepPartialWidgetConfig['backend'] | undefined {
@@ -449,11 +491,13 @@ function sanitizeEmbedderBackendPartial(
     return undefined;
   }
   const b = backend as Record<string, unknown>;
-  const tid = str(b.tenantId);
+  const cid = str(b.companyId) ?? str(b.tenantId);
   const key = str(b.apiKey) ?? str(b.accessKey);
+  const secret = str(b.secretKey);
   return pickDefined({
-    tenantId: tid !== undefined && tid.trim() !== '' ? tid.trim() : undefined,
+    companyId: cid !== undefined && cid.trim() !== '' ? cid.trim() : undefined,
     apiKey: key !== undefined && key.trim() !== '' ? key.trim() : undefined,
+    secretKey: secret !== undefined && secret.trim() !== '' ? secret.trim() : undefined,
     lockTenant: bool(b.lockTenant),
     hideTenantField: bool(b.hideTenantField)
   }) as DeepPartialWidgetConfig['backend'];
