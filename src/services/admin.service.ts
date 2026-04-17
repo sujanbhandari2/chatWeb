@@ -5,6 +5,7 @@ import {
   deleteAdminClient,
   getAdminProfile,
   listAdminClientApiKeys,
+  listAdminClients,
   loginAdmin,
   revokeAdminClientApiKey,
   updateAdminClient
@@ -17,6 +18,7 @@ import { pickBearerToken } from '../types/admin.types';
 export const adminKeys = {
   all: ['admin'] as const,
   profile: () => [...adminKeys.all, 'profile'] as const,
+  clients: () => [...adminKeys.all, 'clients'] as const,
   userKeys: (userId: string) => [...adminKeys.all, 'api-keys', userId] as const
 };
 
@@ -30,6 +32,15 @@ export const useAdminProfileQuery = () => {
   return useQuery({
     queryKey: adminKeys.profile(),
     queryFn: () => getAdminProfile(),
+    enabled: Boolean(token?.trim())
+  });
+};
+
+export const useAdminClientsQuery = () => {
+  const token = useAdminAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: adminKeys.clients(),
+    queryFn: () => listAdminClients(),
     enabled: Boolean(token?.trim())
   });
 };
@@ -49,8 +60,10 @@ export const useAdminLoginMutation = () => {
 };
 
 export const useCreateAdminClientMutation = () => {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: createAdminClient,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.clients() }),
     onError: toastApiError
   });
 };
@@ -62,11 +75,14 @@ export const useUpdateAdminClientMutation = () =>
     onError: toastApiError
   });
 
-export const useDeleteAdminClientMutation = () =>
-  useMutation({
+export const useDeleteAdminClientMutation = () => {
+  const qc = useQueryClient();
+  return useMutation({
     mutationFn: deleteAdminClient,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.clients() }),
     onError: toastApiError
   });
+};
 
 export const useAdminClientApiKeysQuery = (userId: string) => {
   const token = useAdminAuthStore((s) => s.token);

@@ -23,24 +23,24 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
   const canUseApi = Boolean(token?.trim() || getResolvedApiKey());
+  const apiKey = getResolvedApiKey();
   const socketAuth = useMemo(
     () =>
-      user && (token?.trim() || getResolvedApiKey()?.trim())
+      user && token?.trim() && apiKey?.trim()
         ? {
-            token: token?.trim() ? token.trim() : undefined,
-            apiKey: getResolvedApiKey()?.trim() || undefined,
+            token: token.trim(),
+            apiKey: apiKey.trim(),
             companyId: user.companyId,
             userId: user.id
           }
         : null,
-    [user, token]
+    [user, token, apiKey]
   );
   const socket = useChatSocket(socketAuth);
 
   const messageScrollerRef = useRef<HTMLElement | null>(null);
   const chatHeaderMenuRef = useRef<HTMLDivElement | null>(null);
   const chatsListOverflowMenuRef = useRef<HTMLDivElement | null>(null);
-  const lastAutoScrollKeyRef = useRef<string>('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -105,28 +105,6 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   useEffect(() => {
     useChatStore.getState().clearMessageSpeechOnConversationChange();
   }, [selectedConversationId]);
-
-  useEffect(() => {
-    if (!selectedConversationId) {
-      return;
-    }
-    const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : '';
-    const autoScrollKey = `${selectedConversationId}:${lastMessageId}:${messages.length}`;
-    if (autoScrollKey === lastAutoScrollKeyRef.current) {
-      return;
-    }
-    lastAutoScrollKeyRef.current = autoScrollKey;
-    const scroller = messageScrollerRef.current;
-    if (!scroller) {
-      return;
-    }
-    window.requestAnimationFrame(() => {
-      scroller.scrollTo({
-        top: scroller.scrollHeight,
-        behavior: 'smooth'
-      });
-    });
-  }, [messages, selectedConversationId]);
 
   useEffect(() => {
     try {
@@ -435,18 +413,6 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       socket.off('connect', joinAllConversations);
     };
   }, [socket, conversations]);
-
-  useEffect(() => {
-    if (!canUseApi) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      void useChatStore.getState().refreshUsers();
-    }, 8000);
-
-    return () => window.clearInterval(interval);
-  }, [canUseApi]);
 
   useEffect(() => {
     if (!canUseApi || !user) {

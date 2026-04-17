@@ -21,8 +21,31 @@ function normalizeConversationFromApi(raw: unknown): Conversation {
   if (!isRecord(raw)) {
     return raw as Conversation;
   }
+  const pickIso = (...candidates: unknown[]): string => {
+    for (const c of candidates) {
+      if (typeof c === 'string' && c.trim() !== '') {
+        return c.trim();
+      }
+    }
+    return '';
+  };
   const companyId = String(raw.companyId ?? raw.company_id ?? raw.tenantId ?? raw.tenant_id ?? '');
-  return { ...(raw as unknown as Conversation), companyId };
+  const updatedAt = pickIso(
+    raw.updatedAt,
+    raw.updated_at,
+    raw.lastMessageAt,
+    raw.last_message_at,
+    raw.createdAt,
+    raw.created_at
+  );
+  const createdAt = pickIso(raw.createdAt, raw.created_at, updatedAt);
+  const base = { ...(raw as unknown as Conversation) };
+  return {
+    ...base,
+    companyId,
+    ...(updatedAt ? { updatedAt } : {}),
+    ...(createdAt ? { createdAt } : {})
+  };
 }
 
 function normalizeMessagesPage(raw: unknown): MessagesPage {

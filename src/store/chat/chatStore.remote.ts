@@ -27,6 +27,19 @@ type SetChat = {
 
 type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
+function sortMessagesOldestToNewest(messages: Message[]): Message[] {
+  return [...messages].sort((a, b) => {
+    const taRaw = new Date(a.createdAt).getTime();
+    const tbRaw = new Date(b.createdAt).getTime();
+    const ta = Number.isFinite(taRaw) ? taRaw : 0;
+    const tb = Number.isFinite(tbRaw) ? tbRaw : 0;
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
 export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<ChatStore> {
   return {
     handleLogout: () => {
@@ -61,7 +74,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       });
       try {
         const messagesPage = await chatApi.getMessagesPage(conversationId);
-        get().setMessages(messagesPage.data.map(normalizeMessage));
+        get().setMessages(sortMessagesOldestToNewest(messagesPage.data.map(normalizeMessage)));
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to load conversation');
       }
@@ -105,7 +118,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           return next;
         });
         const messagesPage = await chatApi.getMessagesPage(initialConversationId);
-        get().setMessages(messagesPage.data.map(normalizeMessage));
+        get().setMessages(sortMessagesOldestToNewest(messagesPage.data.map(normalizeMessage)));
       }
     },
 

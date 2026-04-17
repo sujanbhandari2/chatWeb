@@ -148,7 +148,7 @@ export function ChatThreadView(): JSX.Element {
                       disabled={deletingConversation}
                       onClick={() => void handleDeleteSelectedConversation()}
                     >
-                      {deletingConversation ? 'Deleting…' : 'Delete conversation'}
+                      {deletingConversation ? 'Deleting…' : 'Delete Chat'}
                     </button>
                   )}
                 </div>

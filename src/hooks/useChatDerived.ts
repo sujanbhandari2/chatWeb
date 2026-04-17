@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import {
+  getConversationActivityTimeMs,
   isGlobalConversation,
   isGroupConversation,
   userDisplayName
@@ -38,15 +39,19 @@ export function useSortedConversations(): Conversation[] {
   }));
   return useMemo(() => {
     return [...conversations].sort((a, b) => {
-      const unreadA = (unreadByConversation[a.id] ?? 0) > 0 ? 1 : 0;
-      const unreadB = (unreadByConversation[b.id] ?? 0) > 0 ? 1 : 0;
+      const ta = getConversationActivityTimeMs(a);
+      const tb = getConversationActivityTimeMs(b);
+      // Oldest → newest so the latest chat appears at the bottom.
+      if (ta !== tb) {
+        return ta - tb;
+      }
+      // Stable-ish tiebreaker so sort doesn't fall back to API order.
+      const unreadA = unreadByConversation[a.id] ?? 0;
+      const unreadB = unreadByConversation[b.id] ?? 0;
       if (unreadA !== unreadB) {
         return unreadB - unreadA;
       }
-      const ta = new Date(a.updatedAt).getTime();
-      const tb = new Date(b.updatedAt).getTime();
-      // Oldest → newest so the latest chat appears at the bottom.
-      return ta - tb;
+      return String(a.id).localeCompare(String(b.id));
     });
   }, [conversations, unreadByConversation]);
 }

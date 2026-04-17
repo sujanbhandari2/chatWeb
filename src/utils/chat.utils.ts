@@ -80,6 +80,24 @@ export const isGlobalConversation = (conversation: Conversation): boolean => con
 
 export const isGroupConversation = (conversation: Conversation): boolean => conversation.type === 'GROUP';
 
+/**
+ * Last-activity time for ordering chat rows (sidebar). Supports camelCase + snake_case from APIs.
+ * Used for oldest → newest so the latest conversation sits at the bottom.
+ */
+export function getConversationActivityTimeMs(conversation: Conversation): number {
+  const r = conversation as unknown as Record<string, unknown>;
+  const iso =
+    (typeof r.updatedAt === 'string' && r.updatedAt.trim() !== '' ? r.updatedAt : undefined) ??
+    (typeof r.updated_at === 'string' && r.updated_at.trim() !== '' ? r.updated_at : undefined) ??
+    (typeof r.lastMessageAt === 'string' && r.lastMessageAt.trim() !== '' ? r.lastMessageAt : undefined) ??
+    (typeof r.last_message_at === 'string' && r.last_message_at.trim() !== '' ? r.last_message_at : undefined) ??
+    (typeof r.createdAt === 'string' && r.createdAt.trim() !== '' ? r.createdAt : undefined) ??
+    (typeof r.created_at === 'string' && r.created_at.trim() !== '' ? r.created_at : undefined) ??
+    '';
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
 export function pickUserId(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') {
     return undefined;

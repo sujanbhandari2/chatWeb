@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 import { ADMIN_RECENT_CLIENTS_KEY, AdminRoutes } from '../../constants/admin.constants';
@@ -7,9 +8,14 @@ import {
   createAdminClientSchema,
   type CreateAdminClientFormValues
 } from '../../schemas/admin.schemas';
-import { useCreateAdminClientMutation, useDeleteAdminClientMutation } from '../../services/admin.service';
+import {
+  adminKeys,
+  useAdminClientsQuery,
+  useCreateAdminClientMutation,
+  useDeleteAdminClientMutation
+} from '../../services/admin.service';
 import type { AdminClient } from '../../types/admin.types';
-import { extractAdminClientFromCreateResponse, parseAdminClient } from '../../types/admin.types';
+import { parseAdminClient } from '../../types/admin.types';
 
 function readStoredClients(): AdminClient[] {
   try {
@@ -36,13 +42,19 @@ function persistClients(list: AdminClient[]): void {
 }
 
 export function AdminClientsView(): JSX.Element {
-  const [clients, setClients] = useState<AdminClient[]>(readStoredClients);
+  const qc = useQueryClient();
+  const clientsQuery = useAdminClientsQuery();
   const createMut = useCreateAdminClientMutation();
   const deleteMut = useDeleteAdminClientMutation();
 
+  const clients: AdminClient[] =
+    clientsQuery.data !== undefined ? clientsQuery.data : readStoredClients();
+
   useEffect(() => {
-    persistClients(clients);
-  }, [clients]);
+    if (clientsQuery.data !== undefined) {
+      persistClients(clientsQuery.data);
+    }
+  }, [clientsQuery.data]);
 
   const {
     register,
@@ -58,26 +70,22 @@ export function AdminClientsView(): JSX.Element {
     <>
       <h1>Clients</h1>
       <p className="admin-shell__muted">
-        Create merchant accounts for the chat platform. There is no &quot;list all clients&quot; route in the API yet —
-        this table remembers clients you create in this browser (session storage).
+        Create merchant accounts for the chat platform. Clients load from{' '}
+        <code>GET /api/v1/admin/clients</code> when available; if that request fails, this page falls back to clients
+        remembered in this browser (session storage).
       </p>
+      {clientsQuery.isError ? (
+        <p className="admin-shell__muted" style={{ color: '#b45309' }}>
+          Could not refresh clients from the server — showing session storage only.
+        </p>
+      ) : null}
 
       <div className="admin-panel">
         <h2>New client</h2>
         <form
           className="admin-form-grid"
           onSubmit={handleSubmit(async (values) => {
-            const res = await createMut.mutateAsync(values);
-            const parsed = extractAdminClientFromCreateResponse(res, {
-              name: values.name,
-              email: values.email
-            });
-            if (parsed) {
-              setClients((prev) => {
-                const rest = prev.filter((c) => c.id !== parsed.id);
-                return [parsed, ...rest];
-              });
-            }
+            await createMut.mutateAsync(values);
             reset({ name: '', email: '', password: '' });
           })}
         >
@@ -95,7 +103,11 @@ export function AdminClientsView(): JSX.Element {
 
       <div className="admin-panel">
         <h2>Clients</h2>
-        {clients.length === 0 ? (
+        {clientsQuery.isPending && clientsQuery.fetchStatus === 'fetching' && clients.length === 0 ? (
+          <p className="admin-shell__muted" style={{ margin: 0 }}>
+            Loading clients…
+          </p>
+        ) : clients.length === 0 ? (
           <p className="admin-shell__muted" style={{ margin: 0 }}>
             No clients recorded yet.
           </p>
@@ -130,7 +142,9 @@ export function AdminClientsView(): JSX.Element {
                         }
                         void (async (): Promise<void> => {
                           await deleteMut.mutateAsync(c.id);
-                          setClients((prev) => prev.filter((x) => x.id !== c.id));
+                          const next = clients.filter((x) => x.id !== c.id);
+                          persistClients(next);
+                          qc.setQueryData(adminKeys.clients(), next);
                         })();
                       }}
                     >

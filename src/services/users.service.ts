@@ -16,6 +16,6 @@ export const useTenantUsersQuery = () => {
     queryKey: userKeys.tenant(),
     queryFn: () => getTenantUsers(),
     enabled: canQuery,
-    refetchInterval: 8000
+    // Avoid polling `/chat/users` — presence comes from realtime socket when available.
   });
 };

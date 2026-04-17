@@ -4,6 +4,19 @@ import { getResolvedApiKey } from '../lib/api-credentials';
 import { useAuthStore } from '../store/useAuthStore';
 import { normalizeMessage } from '../utils/chat.utils';
 
+function sortMessagesOldestToNewest<T extends { createdAt: string; id: string }>(messages: T[]): T[] {
+  return [...messages].sort((a, b) => {
+    const taRaw = new Date(a.createdAt).getTime();
+    const tbRaw = new Date(b.createdAt).getTime();
+    const ta = Number.isFinite(taRaw) ? taRaw : 0;
+    const tb = Number.isFinite(tbRaw) ? tbRaw : 0;
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
 export const conversationKeys = {
   all: ['conversations'] as const,
   list: () => [...conversationKeys.all, 'list'] as const,
@@ -27,7 +40,7 @@ export const useMessagesQuery = (conversationId: string) => {
   return useQuery({
     queryKey: conversationKeys.messages(conversationId),
     queryFn: () =>
-      chatApi.getMessagesPage(conversationId).then((p) => p.data.map(normalizeMessage)),
+      chatApi.getMessagesPage(conversationId).then((p) => sortMessagesOldestToNewest(p.data.map(normalizeMessage))),
     enabled: canQuery
   });
 };
@@ -47,7 +60,7 @@ export const usePrefetchMessages = () => {
     void qc.prefetchQuery({
       queryKey: conversationKeys.messages(conversationId),
       queryFn: () =>
-        chatApi.getMessagesPage(conversationId).then((p) => p.data.map(normalizeMessage))
+        chatApi.getMessagesPage(conversationId).then((p) => sortMessagesOldestToNewest(p.data.map(normalizeMessage)))
     });
   };
 };
