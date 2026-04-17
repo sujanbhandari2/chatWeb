@@ -3,15 +3,21 @@ import { getResolvedSocketUrl } from '../utils/runtime-endpoints.utils';
 import { formatWireXApiKeyValue } from '../utils/chat-api-key.utils';
 
 export type ChatSocketAuth = {
-  token: string;
+  /** Client JWT when the server returns one; omit empty so `Authorization` is not sent as `Bearer `. */
+  token?: string;
   apiKey: string;
   companyId: string;
   userId: string;
 };
 
-/** Handshake: `X-Api-Key` + JWT + `{ companyId, userId/chatUserId }` (headers + `auth` for browser WS). */
+/** Handshake: `X-Api-Key` + optional JWT + `{ companyId, userId/chatUserId }` (headers + `auth` for browser WS). */
 export function createChatSocket({ token, apiKey, companyId, userId }: ChatSocketAuth): Socket {
   const wireKey = formatWireXApiKeyValue(apiKey) ?? apiKey;
+  const jwt = token?.trim();
+  const pollingHeaders: Record<string, string> = { 'X-Api-Key': wireKey };
+  if (jwt) {
+    pollingHeaders.Authorization = `Bearer ${jwt}`;
+  }
   return io(getResolvedSocketUrl(), {
     path: '/socket.io/',
     /**
@@ -21,14 +27,11 @@ export function createChatSocket({ token, apiKey, companyId, userId }: ChatSocke
      */
     transportOptions: {
       polling: {
-        extraHeaders: {
-          'X-Api-Key': wireKey,
-          Authorization: `Bearer ${token}`
-        }
+        extraHeaders: pollingHeaders
       }
     },
     auth: {
-      token,
+      ...(jwt ? { token: jwt } : {}),
       /** Same value as `X-Api-Key` header — many gateways read this on WS-only handshakes. */
       apiKey: wireKey,
       xApiKey: wireKey,

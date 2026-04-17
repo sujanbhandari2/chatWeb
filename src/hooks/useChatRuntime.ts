@@ -6,7 +6,7 @@ import { SELECTED_CONVERSATION_STORAGE_KEY } from '../constants/session.constant
 import { CLIENT_GOING_OFFLINE_EVENT } from '../features/chat/chat.constants';
 import { setChatSocketInstance } from '../utils/chat-socket-bridge';
 import { pickPresence, pickUserId } from '../utils/chat.utils';
-import { getResolvedApiKey } from '../lib/api-credentials';
+import { getResolvedApiKey, resolveEffectiveXCompanyId } from '../lib/api-credentials';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
 import { selectRuntimeSubscriptionSlice } from '../store/chat/chat-selectors';
@@ -24,18 +24,22 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const clearSession = useAuthStore((s) => s.clearSession);
   const canUseApi = Boolean(token?.trim() || getResolvedApiKey());
   const apiKey = getResolvedApiKey();
-  const socketAuth = useMemo(
-    () =>
-      user && token?.trim() && apiKey?.trim()
-        ? {
-            token: token.trim(),
-            apiKey: apiKey.trim(),
-            companyId: user.companyId,
-            userId: user.id
-          }
-        : null,
-    [user, token, apiKey]
-  );
+  const socketAuth = useMemo(() => {
+    if (!user?.id?.trim() || !apiKey?.trim()) {
+      return null;
+    }
+    const companyId = resolveEffectiveXCompanyId(undefined)?.trim();
+    if (!companyId) {
+      return null;
+    }
+    const jwt = token?.trim();
+    return {
+      ...(jwt ? { token: jwt } : {}),
+      apiKey: apiKey.trim(),
+      companyId,
+      userId: user.id
+    };
+  }, [user, token, apiKey]);
   const socket = useChatSocket(socketAuth);
 
   const messageScrollerRef = useRef<HTMLElement | null>(null);

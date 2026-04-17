@@ -11,7 +11,7 @@ export function useChatSocket(auth: ChatSocketAuth | null): Socket | null {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    if (!auth?.token?.trim() || !auth?.apiKey?.trim() || !auth.companyId?.trim() || !auth.userId?.trim()) {
+    if (!auth?.apiKey?.trim() || !auth.companyId?.trim() || !auth.userId?.trim()) {
       setSocket(null);
       return undefined;
     }
