@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { WIDGET_PUBLIC_PATHS } from '../../constants/widget.constants';
 import type { WidgetInitConfig } from '../../schemas/widget.schemas';
+import type { WidgetUnauthorizedReason } from '../../types/widget-app.types';
 import { WidgetChat } from './ChatWidget';
 import { AuthForm } from '../auth/AuthForm';
 
@@ -35,18 +36,35 @@ export type WidgetUnauthenticatedContentProps = {
   widgetMissingTenant: boolean;
 };
 
+export type WidgetUnauthorizedContentProps = {
+  reason?: WidgetUnauthorizedReason;
+};
+
 /** No launcher actions — static message inside the widget panel. */
-export function WidgetUnauthorizedContent(): JSX.Element {
+export function WidgetUnauthorizedContent({
+  reason = 'missingApiKey'
+}: WidgetUnauthorizedContentProps): JSX.Element {
+  const copy =
+    reason === 'missingCompany' ? (
+      <>
+        The embed is configured with a <strong>fixed company</strong> but no <code>backend.companyId</code> (or env{' '}
+        <code>VITE_WIDGET_COMPANY_ID</code>) was resolved, so <code>X-Company-Id</code> cannot be sent. Set{' '}
+        <code>backend.companyId</code> in <code>window.__HEALTHCHAT_WIDGET_CONFIG__</code>, your build profile, or query
+        params (dev only).
+      </>
+    ) : (
+      <>
+        This chat widget must receive a valid <strong>API credential</strong> (merged <code>id:secret</code> as{' '}
+        <code>X-Api-Key</code>). Set <code>backend.accessKey</code> plus <code>backend.secretKey</code>, or a combined{' '}
+        <code>accessKey</code> string, pass query params (dev only), or use <code>VITE_WIDGET_ACCESS_KEY</code> /{' '}
+        <code>VITE_WIDGET_SECRET_KEY</code> in <code>.env</code> for local widget builds.
+      </>
+    );
   return (
     <div className="auth-shell auth-shell--widget">
       <div className="auth-card" style={{ borderColor: '#fecdd3', boxShadow: '0 20px 48px rgba(185, 28, 28, 0.12)' }}>
         <h1>Unauthorized</h1>
-        <p className="auth-subtitle">
-          This chat widget must receive a valid <strong>API credential</strong> (<code>accessKey:secretKey</code> as{' '}
-          <code>X-Api-Key</code>). Set <code>backend.accessKey</code> plus <code>backend.secretKey</code>, or a combined{' '}
-          <code>accessKey</code> string, pass query params (dev only), or use <code>VITE_WIDGET_ACCESS_KEY</code> /{' '}
-          <code>VITE_WIDGET_SECRET_KEY</code> in <code>.env</code> for local widget builds.
-        </p>
+        <p className="auth-subtitle">{copy}</p>
         <p className="auth-subtitle" style={{ marginTop: '0.75rem' }}>
           <Link to={WIDGET_PUBLIC_PATHS.EMBED_DOCS} style={{ color: '#2563eb' }}>
             Public integration guide
@@ -58,7 +76,7 @@ export function WidgetUnauthorizedContent(): JSX.Element {
   );
 }
 
-/** One-step user creation (`POST /v1/user/users`) before chat UI loads. */
+/** One-step user creation (`POST /api/v1/chat/users`) before chat UI loads. */
 export function WidgetUnauthenticatedContent({
   config,
   widgetMissingTenant

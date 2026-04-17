@@ -25,6 +25,27 @@ function normalizeConversationFromApi(raw: unknown): Conversation {
   return { ...(raw as unknown as Conversation), companyId };
 }
 
+function normalizeMessagesPage(raw: unknown): MessagesPage {
+  const r = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const legacyPag = r.pagination as Record<string, unknown> | undefined;
+  const items = Array.isArray(r.items)
+    ? (r.items as Message[])
+    : Array.isArray(r.data)
+      ? (r.data as Message[])
+      : [];
+  const page = Number(r.page ?? legacyPag?.page ?? 1) || 1;
+  const pageSize = Number(r.pageSize ?? legacyPag?.pageSize ?? 20) || 20;
+  const total = Number(r.total ?? legacyPag?.total ?? 0) || 0;
+  const totalPages =
+    Number(legacyPag?.totalPages) > 0
+      ? Number(legacyPag?.totalPages)
+      : Math.max(1, Math.ceil(total / pageSize));
+  return {
+    data: items,
+    pagination: { page, pageSize, total, totalPages }
+  };
+}
+
 function conversationMessagesPath(conversationId: string): string {
   return `${API_PATHS.CHAT.CONVERSATIONS}/${encodeURIComponent(conversationId)}/messages`;
 }
@@ -38,11 +59,25 @@ export const listConversations = (forUserId: string): Promise<Conversation[]> =>
     .get<unknown>(`${API_PATHS.CHAT.CONVERSATIONS}?${new URLSearchParams({ forUserId })}`)
     .then((raw) => unwrapArray<unknown>(raw).map(normalizeConversationFromApi));
 
-export const createConversation = (body: { isGlobal?: boolean } = {}): Promise<Conversation> =>
+export const createConversation = (
+  body: {
+    isGlobal?: boolean;
+    isGroupChat?: boolean;
+    creatorUserId?: string;
+    participantIds?: string[];
+  } = {}
+): Promise<Conversation> =>
   apiService.post<unknown>(API_PATHS.CHAT.CONVERSATIONS, body).then(normalizeConversationFromApi);
 
-export const addConversationParticipant = (conversationId: string, userId: string): Promise<unknown> =>
-  apiService.post(conversationParticipantsPath(conversationId), { userId });
+export const addConversationParticipant = (
+  conversationId: string,
+  userId: string,
+  actorUserId?: string
+): Promise<unknown> =>
+  apiService.post(conversationParticipantsPath(conversationId), {
+    userId,
+    ...(actorUserId ? { actorUserId } : {})
+  });
 
 export const deleteConversationById = (conversationId: string): Promise<void> =>
   apiService.delete<void>(`${API_PATHS.CHAT.CONVERSATIONS}/${encodeURIComponent(conversationId)}`);
@@ -57,10 +92,11 @@ export const updateConversationById = (
 
 export const addConversationParticipants = async (
   conversationId: string,
-  userIds: string[]
+  userIds: string[],
+  actorUserId?: string
 ): Promise<Conversation> => {
   for (const userId of userIds) {
-    await addConversationParticipant(conversationId, userId);
+    await addConversationParticipant(conversationId, userId, actorUserId);
   }
   const primary = userIds[0];
   if (!primary) {
@@ -85,11 +121,14 @@ export const getMessagesPage = (conversationId: string, page = 1, pageSize = 50)
     pageSize: String(Math.min(Math.max(pageSize, 1), 100))
   });
   return apiService
-    .get<MessagesPage>(`${conversationMessagesPath(conversationId)}?${query}`)
-    .then((page) => ({
-      ...page,
-      data: page.data.map((m) => normalizeMessage(m))
-    }));
+    .get<unknown>(`${conversationMessagesPath(conversationId)}?${query}`)
+    .then((raw) => {
+      const page = normalizeMessagesPage(raw);
+      return {
+        ...page,
+        data: page.data.map((m) => normalizeMessage(m))
+      };
+    });
 };
 
 export const postRestMessage = (conversationId: string, body: { type: string; content: string; senderId: string }) =>
@@ -137,24 +176,37 @@ export async function createGroupConversation(
   _title: string,
   participantIds: string[]
 ): Promise<Conversation> {
-  const created = await createConversation({});
-  const convId = created.id;
-  if (!convId) {
-    throw new Error('Invalid conversation response');
+  const creatorUserId = participantIds[0];
+  if (!creatorUserId) {
+    throw new Error('Group requires a creator');
   }
-  for (const userId of participantIds) {
-    await addConversationParticipant(convId, userId);
-  }
-  const primary = participantIds[0];
-  if (!primary) {
-    return created;
-  }
-  const list = await listConversations(primary);
-  return list.find((c) => c.id === convId) ?? created;
+  const extras = participantIds.slice(1);
+  return createConversation({
+    isGroupChat: true,
+    creatorUserId,
+    ...(extras.length > 0 ? { participantIds: extras } : {})
+  }).then(normalizeConversationFromApi);
 }
+
+/** `GET /api/v1/chat/clients` — company ids where the client has chat profiles. */
+export const listChatClients = (): Promise<unknown[]> =>
+  apiService.get<unknown>(API_PATHS.CHAT.CLIENTS).then((raw) => unwrapArray<unknown>(raw));
 
 export const listChatUsers = (): Promise<unknown[]> =>
   apiService.get<unknown>(API_PATHS.CHAT.USERS).then((raw) => {
     const list = unwrapArray<unknown>(raw);
     return list;
   });
+
+export type RegisterPushTokenBody = {
+  token: string;
+  platform: 'IOS' | 'ANDROID' | 'WEB';
+  deviceId?: string;
+};
+
+/** `POST /api/v1/chat/users/:userId/push-tokens` */
+export const registerChatUserPushToken = (userId: string, body: RegisterPushTokenBody): Promise<unknown> =>
+  apiService.post<unknown>(
+    `${API_PATHS.CHAT.USERS}/${encodeURIComponent(userId)}/push-tokens`,
+    body
+  );

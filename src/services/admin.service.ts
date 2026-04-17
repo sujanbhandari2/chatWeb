@@ -6,7 +6,8 @@ import {
   getAdminProfile,
   listAdminClientApiKeys,
   loginAdmin,
-  revokeAdminClientApiKey
+  revokeAdminClientApiKey,
+  updateAdminClient
 } from '../api/admin.api';
 import { toast } from '../common/ui/Toaster';
 import { ApiError } from '../lib/api-error';
@@ -53,6 +54,13 @@ export const useCreateAdminClientMutation = () => {
     onError: toastApiError
   });
 };
+
+export const useUpdateAdminClientMutation = () =>
+  useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof updateAdminClient>[1] }) =>
+      updateAdminClient(id, body),
+    onError: toastApiError
+  });
 
 export const useDeleteAdminClientMutation = () =>
   useMutation({

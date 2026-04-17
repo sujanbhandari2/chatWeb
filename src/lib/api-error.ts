@@ -13,8 +13,17 @@ export class ApiError extends Error {
   static fromAxios(error: unknown): ApiError {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status ?? 0;
-      const data = error.response?.data as { message?: string; details?: unknown } | undefined;
+      const data = error.response?.data as
+        | { message?: string; error?: string | string[]; details?: unknown }
+        | undefined;
+      const fromErrorField = data?.error;
+      const errorText = Array.isArray(fromErrorField)
+        ? fromErrorField.join('; ')
+        : typeof fromErrorField === 'string'
+          ? fromErrorField
+          : '';
       const message =
+        errorText ||
         (typeof data?.message === 'string' && data.message) ||
         error.message ||
         error.response?.statusText ||

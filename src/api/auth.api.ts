@@ -2,6 +2,14 @@ import type { ProvisionUserInput } from '../schemas/auth.schemas';
 import type { CreateAccountResponse } from '../types/chat';
 import { createClientUser } from './users.api';
 
+function withCompanyFallback(raw: Record<string, unknown>, companyId: string): Record<string, unknown> {
+  const cid = pickCompanyId(raw);
+  if (cid) {
+    return raw;
+  }
+  return { ...raw, companyId };
+}
+
 function pickRecord(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -45,16 +53,18 @@ function mapToAuthUser(raw: Record<string, unknown>): CreateAccountResponse['use
 }
 
 /**
- * Creates the chat end-user via `POST /api/v1/user/users` (embed uses `X-Api-Key` + optional company).
+ * Creates the chat user via `POST /api/v1/chat/users` (embed: `X-Api-Key` + `X-Company-Id`).
  * Response may omit JWT; chat still works with API key + resolved user id.
  */
 export const provisionUser = async (body: ProvisionUserInput): Promise<CreateAccountResponse> => {
-  const created = await createClientUser({
-    companyId: body.companyId.trim(),
-    email: body.email.trim(),
-    name: body.name.trim(),
-    externalId: body.externalId.trim()
-  });
+  const companyId = body.companyId.trim();
+  const created = await createClientUser(
+    {
+      email: body.email.trim(),
+      name: body.name.trim()
+    },
+    companyId
+  );
   const root = pickRecord(created) ?? {};
   const token =
     typeof root.token === 'string'
@@ -64,7 +74,7 @@ export const provisionUser = async (body: ProvisionUserInput): Promise<CreateAcc
         : typeof root.accessToken === 'string'
           ? root.accessToken
           : '';
-  const userSource = pickUserRecordFromClientCreateResponse(created);
+  const userSource = withCompanyFallback(pickUserRecordFromClientCreateResponse(created), companyId);
   const user = mapToAuthUser(userSource);
   if (!user.id?.trim()) {
     throw new Error('User id missing in API response');

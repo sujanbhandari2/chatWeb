@@ -208,7 +208,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         const removedOthers = removed.filter((id) => id !== user.id);
 
         if (added.length > 0) {
-          await chatApi.addConversationParticipants(convId, added);
+          await chatApi.addConversationParticipants(convId, added, user.id);
         }
         for (const uid of removedOthers) {
           await chatApi.removeConversationParticipant(convId, uid);
@@ -445,11 +445,10 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         }
 
         socket.emit(
-          'react_to_message',
+          'react_message',
           {
             messageId,
             conversationId,
-            emoji,
             reactionType: emoji
           },
           (response?: SocketAck<unknown>) => {
@@ -487,8 +486,12 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     },
 
     handleMarkRead: async (messageId) => {
+      const conversationId = get().selectedConversationId;
+      if (!conversationId?.trim()) {
+        return;
+      }
       try {
-        await chatEmitWithAck('mark_as_read', { messageId });
+        await chatEmitWithAck('message_read', { conversationId, messageId });
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to mark as read');
       }

@@ -3,7 +3,7 @@ import { WidgetSessionLoadingShell } from '../../features/chat-widget/WidgetSess
 import { WidgetUnauthorizedShell } from '../../features/chat-widget/WidgetUnauthorizedShell';
 import { WidgetUnauthenticatedShell } from '../../features/chat-widget/WidgetUnauthenticatedShell';
 import { useWidgetConfig } from '../../hooks/useWidgetConfig';
-import { getResolvedApiKey } from '../../lib/api-credentials';
+import { getResolvedApiKey, getResolvedCompanyId } from '../../lib/api-credentials';
 import type { WidgetChatAppProps } from '../../types/widget-app.types';
 import { ChatSidebar } from './chat-app/ChatSidebar';
 import { ChatThreadView } from './chat-app/ChatThreadView';
@@ -32,7 +32,14 @@ export default function WidgetChatApp({ widgetConfig }: WidgetChatAppProps): JSX
   }
 
   if (!getResolvedApiKey()) {
-    return <WidgetUnauthorizedShell config={config} />;
+    return <WidgetUnauthorizedShell config={config} reason="missingApiKey" />;
+  }
+
+  const lockCompanyFromEmbed =
+    Boolean(config.backend?.lockTenant || config.backend?.hideTenantField) &&
+    !getResolvedCompanyId()?.trim();
+  if (lockCompanyFromEmbed) {
+    return <WidgetUnauthorizedShell config={config} reason="missingCompany" />;
   }
 
   const canUseApi = Boolean(token?.trim() || getResolvedApiKey());

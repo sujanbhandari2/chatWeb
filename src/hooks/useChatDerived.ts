@@ -45,7 +45,8 @@ export function useSortedConversations(): Conversation[] {
       }
       const ta = new Date(a.updatedAt).getTime();
       const tb = new Date(b.updatedAt).getTime();
-      return tb - ta;
+      // Oldest → newest so the latest chat appears at the bottom.
+      return ta - tb;
     });
   }, [conversations, unreadByConversation]);
 }

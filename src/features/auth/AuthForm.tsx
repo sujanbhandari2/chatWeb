@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { provisionUserSchema, type ProvisionUserInput } from '../../schemas/auth.schemas';
 import { useProvisionUserMutation } from '../../services/auth.service';
 import type { WidgetInitConfig } from '../../schemas/widget.schemas';
-import { WIDGET_EXTERNAL_ID_STORAGE_KEY } from '../../constants/session.constants';
 
 export type AuthFormProps = {
   widgetMode?: boolean;
@@ -17,23 +16,6 @@ function authErrorMessage(err: unknown): string {
     return err.message;
   }
   return 'Could not start chat';
-}
-
-function getOrCreateWidgetExternalId(): string {
-  try {
-    const existing = window.localStorage.getItem(WIDGET_EXTERNAL_ID_STORAGE_KEY);
-    if (existing?.trim()) {
-      return existing.trim();
-    }
-    const id =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `ext_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-    window.localStorage.setItem(WIDGET_EXTERNAL_ID_STORAGE_KEY, id);
-    return id;
-  } catch {
-    return `ext_${Date.now()}`;
-  }
 }
 
 export function AuthForm({ widgetMode = false, widgetConfig, widgetMissingTenant }: AuthFormProps): JSX.Element {
@@ -55,16 +37,14 @@ export function AuthForm({ widgetMode = false, widgetConfig, widgetMissingTenant
     defaultValues: {
       companyId: defaultCompanyId,
       name: '',
-      email: '',
-      externalId: getOrCreateWidgetExternalId()
+      email: ''
     }
   });
 
   useEffect(() => {
     reset((prev) => ({
       ...prev,
-      companyId: defaultCompanyId,
-      externalId: prev.externalId?.trim() || getOrCreateWidgetExternalId()
+      companyId: defaultCompanyId
     }));
   }, [defaultCompanyId, reset]);
 
@@ -95,8 +75,6 @@ export function AuthForm({ widgetMode = false, widgetConfig, widgetMissingTenant
       {errors.name && <p className="error-banner">{errors.name.message}</p>}
       <input {...register('email')} placeholder="Email" type="email" required disabled={widgetMissingTenant} />
       {errors.email && <p className="error-banner">{errors.email.message}</p>}
-      <input type="hidden" {...register('externalId')} />
-      {errors.externalId && <p className="error-banner">{errors.externalId.message}</p>}
       <button type="submit" disabled={widgetMissingTenant || mutation.isPending}>
         {mutation.isPending ? 'Starting…' : 'Open chat'}
       </button>

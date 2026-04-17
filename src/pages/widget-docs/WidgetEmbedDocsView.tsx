@@ -14,9 +14,9 @@ export default function WidgetEmbedDocsView(): JSX.Element {
           <h1>Embed the chat widget on your website</h1>
           <p>
             The widget needs a client API credential (<strong>
-              <code>accessKey:secretKey</code>
+              merged <code>id:secret</code>
             </strong>{' '}
-            as <code>X-Api-Key</code>) on every load. Without it, visitors only see <strong>Unauthorized</strong>. This
+            as the <code>X-Api-Key</code> header) on every load. Without it, visitors only see <strong>Unauthorized</strong>. This
             page summarizes how to integrate; repo copy also lives in{' '}
             <code>docs/WIDGET_WEBSITE.md</code>.
           </p>
@@ -121,9 +121,10 @@ export default function WidgetEmbedDocsView(): JSX.Element {
           <h2>6. End users inside the widget</h2>
           <p>
             After the embed key is present, visitors enter name and email once. The client calls{' '}
-            <code>POST /api/v1/user/users</code> with <code>companyId</code>, <code>email</code>, <code>name</code>, and{' '}
-            <code>externalId</code> (a stable anonymous id is generated automatically). There is
-            no separate login/register API. Optional JWTs from your server are used when returned.
+            <code>POST /api/v1/chat/users</code> with <code>email</code> and <code>name</code> (optional on the
+            server; the widget still collects a display name). <code>backend.companyId</code> is sent as{' '}
+            <code>X-Company-Id</code>, not in the JSON body. There is no separate login/register API. Optional JWTs from
+            your server are used when returned.
           </p>
         </section>
 

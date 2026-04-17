@@ -5,6 +5,12 @@ export type AdminLoginBody = { email: string; password: string };
 
 export type CreateAdminClientBody = { name: string; email: string; password: string };
 
+export type UpdateAdminClientBody = {
+  name?: string;
+  email?: string;
+  password?: string;
+};
+
 export type CreateAdminApiKeyBody = {
   name?: string;
   scopes?: string[];
@@ -20,6 +26,9 @@ export const getAdminProfile = (): Promise<unknown> => apiService.get<unknown>(A
 
 export const createAdminClient = (body: CreateAdminClientBody): Promise<unknown> =>
   apiService.post<unknown>(API_PATHS.ADMIN.CLIENTS, body);
+
+export const updateAdminClient = (id: string, body: UpdateAdminClientBody): Promise<unknown> =>
+  apiService.patch<unknown>(clientBase(id), body);
 
 export const deleteAdminClient = (id: string): Promise<unknown> => apiService.delete<unknown>(clientBase(id));
 

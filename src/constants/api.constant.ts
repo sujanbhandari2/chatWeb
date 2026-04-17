@@ -7,13 +7,12 @@ export const API_PATHS = {
   CLIENT: {
     LOGIN: '/v1/auth/client/login',
     HEALTH: '/v1/system/health',
-    USERS: '/v1/user/users',
     SHARED_ME: '/v1/shared/me',
     SHARED_API_KEYS: '/v1/shared/api-keys'
   },
-  /** Chat (bearer or `X-Api-Key`, optional `X-Company-Id`). */
+  /** Chat (OpenAPI “Chat API”: `X-Api-Key` / HMAC + `X-Company-Id` where required). */
   CHAT: {
-    TENANTS: '/v1/chat/tenants',
+    CLIENTS: '/v1/chat/clients',
     USERS: '/v1/chat/users',
     CONVERSATIONS: '/v1/chat/conversations'
   },

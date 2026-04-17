@@ -1,7 +1,7 @@
 import { wrapWidgetContent, WidgetUnauthenticatedContent } from './widget-shell';
 import type { WidgetUnauthenticatedShellProps } from '../../types/widget-app.types';
 
-/** User bootstrap form when the visitor has not completed `POST /v1/user/users` yet. */
+/** User bootstrap form when the visitor has not completed `POST /api/v1/chat/users` yet. */
 export function WidgetUnauthenticatedShell({
   config,
   isMissingTenant

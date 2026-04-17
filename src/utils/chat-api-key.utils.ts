@@ -1,7 +1,7 @@
 /**
- * Chat gateway expects `X-Api-Key` in the form **`accessKey:<credential>`** where `<credential>` is
- * the value from env (`VITE_WIDGET_ACCESS_KEY` / secret merge) or the merged embed id:secret.
- * Embedders set `backend.accessKey` / `apiKey` / `secretKey` without the `accessKey:` prefix; axios adds it.
+ * Chat gateway expects `X-Api-Key` to be the merged credential (typically **`publicId:secret`**) from env
+ * (`VITE_WIDGET_ACCESS_KEY` / secret merge) or embed `backend.accessKey` / `apiKey` / `secretKey`.
+ * Legacy values that still start with **`accessKey:`** are stripped so pasted admin strings work.
  */
 
 export type ChatApiKeyParts = {
@@ -23,19 +23,26 @@ export function resolveXApiKeyHeaderValue(parts: ChatApiKeyParts): string | unde
   return secret || undefined;
 }
 
-const WIRE_API_KEY_PREFIX = 'accessKey:';
+const LEGACY_ACCESS_KEY_HEADER_PREFIX = 'accessKey:';
 
-/** Normalizes the resolved credential to the wire form `accessKey:…` (idempotent). */
+/** Trims the credential and removes any legacy `accessKey:` prefix (repeatable). */
 export function formatWireXApiKeyValue(raw: string | undefined): string | undefined {
-  const t = raw?.trim();
+  let t = raw?.trim();
   if (!t) {
     return undefined;
   }
-  const lower = t.toLowerCase();
-  if (lower.startsWith(WIRE_API_KEY_PREFIX.toLowerCase())) {
-    return t;
+  const prefixLower = LEGACY_ACCESS_KEY_HEADER_PREFIX.toLowerCase();
+  for (;;) {
+    const lower = t.toLowerCase();
+    if (!lower.startsWith(prefixLower)) {
+      break;
+    }
+    t = t.slice(LEGACY_ACCESS_KEY_HEADER_PREFIX.length).trim();
+    if (!t) {
+      return undefined;
+    }
   }
-  return `${WIRE_API_KEY_PREFIX}${t}`;
+  return t;
 }
 
 function unwrapAdminEntity(payload: unknown): Record<string, unknown> | null {
@@ -61,7 +68,7 @@ function pickFirstString(o: Record<string, unknown>, keys: string[]): string | u
 }
 
 /**
- * Parses POST create-client-api-key JSON into the header string for chat (`accessKey:secretKey`).
+ * Parses POST create-client-api-key JSON into the raw `X-Api-Key` credential (typically `id:secret`).
  */
 export function parseAdminCreateApiKeyHeaderValue(payload: unknown): string | undefined {
   const o = unwrapAdminEntity(payload);

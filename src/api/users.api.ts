@@ -4,15 +4,15 @@ import { listChatUsers } from './chat.api';
 import type { TenantUser } from '../types/chat';
 
 export type CreateClientUserBody = {
-  companyId: string;
   email: string;
-  name: string;
-  externalId: string;
+  name?: string;
 };
 
-/** POST `/v1/user/users` — creates or resolves the end-user for chat (OpenAPI). */
-export const createClientUser = (body: CreateClientUserBody): Promise<unknown> =>
-  apiService.post<unknown>(API_PATHS.CLIENT.USERS, body);
+/** `POST /api/v1/chat/users` — requires `X-Company-Id` (sent here so it matches the provision form when tenant is editable). */
+export const createClientUser = (body: CreateClientUserBody, companyId: string): Promise<unknown> =>
+  apiService.post<unknown>(API_PATHS.CHAT.USERS, body, {
+    headers: { 'X-Company-Id': companyId.trim() }
+  });
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);

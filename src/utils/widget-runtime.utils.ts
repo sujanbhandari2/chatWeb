@@ -7,7 +7,7 @@
  * `config/widget.config.ts` → `window.__HEALTHCHAT_WIDGET_CONFIG__` → URL search params
  * (`parseWidgetConfigFromSearchParams`). **Embedders may set** on `backend`: `companyId`
  * (legacy: `tenantId`), `lockTenant`, `hideTenantField`, and **`accessKey` / `apiKey`** plus optional **`secretKey`**
- * (sent as `X-Api-Key` = `accessKey:secretKey` when both halves are set; required
+ * (sent as `X-Api-Key` = merged `id:secret` when both halves are set; required
  * for the chat widget to load — see `docs/WIDGET_WEBSITE.md`). **API URLs, sockets, timeouts, and
  * other `backend` keys** come from your built profile unless also allowed above. **Branding / typography / a11y /
  * styling (e.g. `classPrefix`), `features`, and `app`** from window/URL are stripped. **Colors** from the URL are ignored in **production**; in **dev**,

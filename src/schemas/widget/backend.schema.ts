@@ -7,7 +7,7 @@ export const backendSchema = z.object({
   apiKey: z.string().optional(),
   /** Same as `apiKey` — preferred name for website embedders (`window` / query). */
   accessKey: z.string().optional(),
-  /** Secret half of the credential; with `accessKey` / `apiKey` forms `X-Api-Key: accessKey:secretKey`. */
+  /** Secret half of the credential; with `accessKey` / `apiKey` merged into `X-Api-Key` as `id:secret`. */
   secretKey: z.string().optional(),
   lockTenant: z.boolean().default(false),
   hideTenantField: z.boolean().default(false),

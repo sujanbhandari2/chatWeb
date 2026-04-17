@@ -3,7 +3,7 @@ export type ConversationType = string;
 
 export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE';
 
-/** End-user profile (`POST /v1/user/users` or persisted session). */
+/** Chat user profile (`POST /api/v1/chat/users` or persisted session). */
 export interface AuthUser {
   id: string;
   name: string | null;

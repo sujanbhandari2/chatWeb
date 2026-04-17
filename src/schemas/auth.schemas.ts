@@ -5,14 +5,12 @@ const emailSchema = z.string().email();
 const companyIdSchema = z.string().min(1, 'Company is required').max(120);
 
 /**
- * Single user bootstrap for chat: `POST /v1/user/users` (no separate login/register APIs).
+ * Widget bootstrap: company sets `X-Company-Id`; profile is `POST /api/v1/chat/users`.
  */
 export const provisionUserSchema = z.object({
   companyId: companyIdSchema,
   name: nameSchema,
-  email: emailSchema,
-  /** Stable id for the visitor (defaults to a persisted anonymous id in the widget). */
-  externalId: z.string().min(1).max(200)
+  email: emailSchema
 });
 
 export type ProvisionUserInput = z.infer<typeof provisionUserSchema>;

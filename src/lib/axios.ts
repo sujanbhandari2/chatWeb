@@ -1,10 +1,29 @@
 import axios from 'axios';
 import { getApiBaseUrl, getResolvedApiTimeoutMs } from '../utils/runtime-endpoints.utils';
-import { getResolvedApiKey, getResolvedCompanyId } from './api-credentials';
+import { getResolvedApiKey, resolveEffectiveXCompanyId } from './api-credentials';
 import { formatWireXApiKeyValue } from '../utils/chat-api-key.utils';
 import { useAdminAuthStore } from '../store/useAdminAuthStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from './api-error';
+
+function readXCompanyIdHeader(headers: unknown): string | undefined {
+  if (!headers || typeof headers !== 'object') {
+    return undefined;
+  }
+  const h = headers as Record<string, unknown> & { get?: (key: string) => unknown };
+  if (typeof h.get === 'function') {
+    const v = h.get('X-Company-Id') ?? h.get('x-company-id');
+    if (typeof v === 'string') {
+      return v;
+    }
+    if (Array.isArray(v) && typeof v[0] === 'string') {
+      return v[0];
+    }
+    return undefined;
+  }
+  const v = h['X-Company-Id'] ?? h['x-company-id'];
+  return typeof v === 'string' ? v : undefined;
+}
 
 function readAuthorizationHeader(headers: unknown): string | undefined {
   if (!headers || typeof headers !== 'object') {
@@ -57,7 +76,7 @@ apiAxios.interceptors.request.use((config) => {
     if (apiKey) {
       config.headers['X-Api-Key'] = apiKey;
     }
-    const companyId = getResolvedCompanyId();
+    const companyId = resolveEffectiveXCompanyId(readXCompanyIdHeader(config.headers));
     if (companyId) {
       config.headers['X-Company-Id'] = companyId;
     }

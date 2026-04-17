@@ -119,8 +119,8 @@ export function AdminClientApiKeysView(): JSX.Element {
         <div className="admin-panel" style={{ border: '2px solid #2563eb' }}>
           <h2>Copy this credential now</h2>
           <p className="admin-shell__muted" style={{ marginTop: 0 }}>
-            Store this credential; the web client sends{' '}
-            <code style={{ fontSize: '0.9em' }}>X-Api-Key: accessKey:</code> plus the id:secret below. This value will
+            Store this credential; the web client sends it as the{' '}
+            <code style={{ fontSize: '0.9em' }}>X-Api-Key</code> header (same id:secret value below). This value will
             not be shown again—store it in your secrets manager.
           </p>
           <pre
