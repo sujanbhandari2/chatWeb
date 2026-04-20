@@ -5,9 +5,10 @@
  *
  * **Merge order** (each step overrides the previous): `getWidgetProfilePartial()` from
  * `config/widget.config.ts` → `window.__HEALTHCHAT_WIDGET_CONFIG__` → URL search params
- * (`parseWidgetConfigFromSearchParams`). **Embedders may set tenant routing only** on
- * `backend`: `tenantId`, `lockTenant`, `hideTenantField`. **API URLs, sockets, timeouts, and
- * non-tenant `backend` keys** come only from your built profile. **Branding / typography / a11y /
+ * (`parseWidgetConfigFromSearchParams`). **Embedders may set on `backend`:** `tenantId`,
+ * `lockTenant`, `hideTenantField`, and optional **`tenantJwt`** (Socket.IO `handshake.auth.token`
+ * when the UI session token is not a JWT). **API URLs, sockets, timeouts, and other `backend` keys**
+ * come only from your built profile. **Branding / typography / a11y /
  * styling (e.g. `classPrefix`), `features`, and `app`** from window/URL are stripped. **Colors** from the URL are ignored in **production**; in **dev**,
  * `?__hc_cfg_preview=1` with `primaryColor`, `secondaryColor`, … (see `buildWidgetIframeSrc` option
  * `configuratorPreview`) merges for the configurator iframe only.
@@ -430,7 +431,7 @@ const CLIENT_VENDOR_TOP_KEYS = [
   'debug'
 ] as const satisfies readonly (keyof DeepPartialWidgetConfig)[];
 
-/** From window/URL `backend`, keep only tenant-facing fields; API sockets/timeouts stay profile-only. */
+/** From window/URL `backend`, keep tenant-facing fields (+ optional `tenantJwt`); API sockets/timeouts stay profile-only. */
 function sanitizeEmbedderBackendPartial(
   backend: unknown
 ): DeepPartialWidgetConfig['backend'] | undefined {
@@ -439,10 +440,14 @@ function sanitizeEmbedderBackendPartial(
   }
   const b = backend as Record<string, unknown>;
   const tid = str(b.tenantId);
+  const jwtRaw = str(b.tenantJwt);
+  const tenantJwt =
+    jwtRaw !== undefined && jwtRaw.trim() !== '' ? jwtRaw.trim() : undefined;
   return pickDefined({
     tenantId: tid !== undefined && tid.trim() !== '' ? tid.trim() : undefined,
     lockTenant: bool(b.lockTenant),
-    hideTenantField: bool(b.hideTenantField)
+    hideTenantField: bool(b.hideTenantField),
+    tenantJwt
   }) as DeepPartialWidgetConfig['backend'];
 }
 

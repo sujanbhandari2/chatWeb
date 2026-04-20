@@ -1,8 +1,6 @@
 let runtimeApiUrl: string | undefined;
 let runtimeSocketUrl: string | undefined;
 let runtimeApiTimeoutMs: number | undefined;
-/** `accessKey:secretKey` for Vitafy `/api/v1/chat/*` and Socket.IO (see `api_doc.md`). */
-let runtimeChatApiKey: string | undefined;
 
 /** Call before first API/socket use when embedding (e.g. from `getWidgetInitConfig()` in `main-widget.tsx`). */
 export function applyRuntimeApiOverrides(overrides: {
@@ -10,24 +8,19 @@ export function applyRuntimeApiOverrides(overrides: {
   socketUrl?: string;
   /** From `WidgetInitConfig.backend.apiTimeout`; applied to axios request `timeout`. */
   apiTimeout?: number;
-  /** Optional; otherwise `import.meta.env.VITE_WIDGET_ACCESS_KEY` is used when set. */
-  chatApiKey?: string;
 }): void {
   runtimeApiUrl = overrides.apiUrl?.replace(/\/$/, '') || undefined;
   runtimeSocketUrl = overrides.socketUrl?.replace(/\/$/, '') || undefined;
   if (overrides.apiTimeout !== undefined && Number.isFinite(overrides.apiTimeout) && overrides.apiTimeout > 0) {
     runtimeApiTimeoutMs = overrides.apiTimeout;
   }
-  if (overrides.chatApiKey !== undefined) {
-    runtimeChatApiKey = overrides.chatApiKey.trim() || undefined;
-  }
 }
 
-/** Colon-separated chat API key for `X-Api-Key` (HTTP) and handshake `auth.apiKey` (Socket.IO). */
+/**
+ * Colon-separated `accessKey:secretKey` for Vitafy chat REST (`X-Api-Key`) and Socket.IO (`auth.apiKey`).
+ * Source: **`import.meta.env.VITE_WIDGET_ACCESS_KEY` only** (no profile / runtime overrides).
+ */
 export function getChatApiKey(): string | undefined {
-  if (runtimeChatApiKey) {
-    return runtimeChatApiKey;
-  }
   const fromEnv = import.meta.env.VITE_WIDGET_ACCESS_KEY;
   return typeof fromEnv === 'string' && fromEnv.trim() ? fromEnv.trim() : undefined;
 }

@@ -108,3 +108,11 @@ export const tenantUserAsLabel = (u: TenantUser): UserLabel => ({
   name: u.name,
   email: u.email
 });
+
+/** Heuristic: Vitafy tenant/admin JWTs are standard JWT strings (three base64url-ish segments). */
+export function isLikelyJwt(value: string | undefined | null): boolean {
+  if (!value) {
+    return false;
+  }
+  return value.split('.').length === 3;
+}

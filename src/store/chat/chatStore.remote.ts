@@ -16,9 +16,11 @@ import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
 import { findDirectConversation } from './chatStore.utils';
 import type { TenantUser } from '../../types/chat';
+import { isLikelyJwt } from '../../utils/chat.utils';
 
-function isWidgetApiKeySessionToken(token: string): boolean {
-  return token === 'chat-api-key';
+function isWidgetLikeSessionToken(token: string): boolean {
+  // Widget embed can use a non-JWT session marker while still using API-key chat REST.
+  return Boolean(token) && !isLikelyJwt(token);
 }
 
 type SetChat = {
@@ -100,8 +102,8 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       const token = useAuthStore.getState().token;
       const [loadedConversations] = await Promise.all([get().refreshConversations(), get().refreshUsers()]);
       // Widget-only chat session (no tenant JWT): start on People so the user picks who to chat with first.
-      const isWidgetApiKeySession = isWidgetApiKeySessionToken(token);
-      if (isWidgetApiKeySession) {
+      const isWidgetLikeSession = isWidgetLikeSessionToken(token);
+      if (isWidgetLikeSession) {
         get().setWidgetRailPane(WidgetPanelType.PEOPLE);
         get().setSelectedConversationId('');
         get().setMessages([]);
@@ -289,7 +291,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         const trimmed = text.trim();
 
         let message: Message;
-        if (isWidgetApiKeySessionToken(token)) {
+        if (isWidgetLikeSessionToken(token)) {
           if (!user?.id) {
             throw new Error('Missing chat user');
           }
@@ -323,7 +325,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       try {
         const uploaded = await uploadFileRequest(file);
         let message: Message;
-        if (isWidgetApiKeySessionToken(token)) {
+        if (isWidgetLikeSessionToken(token)) {
           if (!user?.id) {
             throw new Error('Missing chat user');
           }

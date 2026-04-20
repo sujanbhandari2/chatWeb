@@ -10,7 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_WIDGET_PROFILE?: string;
   /** Injected from `package.json` version at build time (`vite.config.ts`). */
   readonly VITE_APP_VERSION: string;
-  /** Vitafy chat: `accessKey:secretKey` for `/v1/chat/*` REST and Socket.IO (`api_doc.md`). */
+  /** Vitafy chat: `accessKey:secretKey` — sole env source for `/v1/chat/*` (`X-Api-Key`) and Socket.IO `auth.apiKey`. */
   readonly VITE_WIDGET_ACCESS_KEY?: string;
 }
 
@@ -18,7 +18,7 @@ declare global {
   interface Window {
     /**
      * Optional embed overrides before the widget bundle loads.
-     * Applied: **layout / interaction**, and **`backend.tenantId` / `lockTenant` / `hideTenantField`** only.
+     * Applied: **layout / interaction**, and **`backend.tenantId` / `lockTenant` / `hideTenantField` / `tenantJwt`**.
      * Ignored from here: `backend.apiUrl`, `socketUrl`, timeouts, plus `uiElements`, `colors`, `typography`, `a11y`,
      * `features`, `app`, `zIndex`, `debug` (use `src/config/widget.config.ts`).
      */

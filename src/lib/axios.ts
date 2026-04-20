@@ -37,6 +37,13 @@ apiAxios.interceptors.request.use((config) => {
     } else {
       delete config.headers.Authorization;
     }
+  } else if (url.includes('/v1/shared/')) {
+    const tenantToken = useAuthStore.getState().token;
+    if (tenantToken) {
+      config.headers.Authorization = `Bearer ${tenantToken}`;
+    } else {
+      delete config.headers.Authorization;
+    }
   } else if (isChat) {
     // Chat routes authenticate with X-Api-Key (and optionally Socket.IO auth), not tenant JWT.
     delete config.headers.Authorization;
@@ -77,7 +84,9 @@ apiAxios.interceptors.response.use(
         const reqUrl = error.config?.url ?? '';
         if (reqUrl.includes('/v1/admin/')) {
           useAdminAuthStore.getState().clearSession();
-        } else {
+        } else if (reqUrl.includes('/v1/shared/') || reqUrl.includes('/v1/auth/')) {
+          useAuthStore.getState().clearSession();
+        } else if (!reqUrl.includes('/v1/chat/')) {
           useAuthStore.getState().clearSession();
         }
       }

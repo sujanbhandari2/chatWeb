@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef } from 'react';
 import type { DeliveredReceipt, Message, ReadReceipt } from '../types/chat';
 import { WidgetPanelType } from '../types/chat';
 import { useChatSocket } from './useChatSocket';
@@ -12,6 +12,7 @@ import { selectRuntimeSubscriptionSlice } from '../store/chat/chat-selectors';
 import { useChatStore } from '../store/useChatStore';
 import type { WidgetInitConfig } from '../schemas/widget.schemas';
 import type { ChatRuntimeValue } from '../types/chat-runtime.types';
+import { isLikelyJwt } from '../utils/chat.utils';
 
 type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
@@ -21,7 +22,6 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
-  const socket = useChatSocket(token || undefined, user?.id);
 
   const messageScrollerRef = useRef<HTMLElement | null>(null);
   const chatHeaderMenuRef = useRef<HTMLDivElement | null>(null);
@@ -35,11 +35,6 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const newGroupFormId = useId().replace(/:/g, '');
   const editGroupFormId = useId().replace(/:/g, '');
 
-  useEffect(() => {
-    setChatSocketInstance(socket ?? null);
-    return () => setChatSocketInstance(null);
-  }, [socket]);
-
   const {
     selectedConversationId,
     messages,
@@ -52,6 +47,25 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     widgetInboxMenuOpen,
     conversations,
   } = useChatSelectors(selectRuntimeSubscriptionSlice);
+
+  const tenantJwtForSocket = useMemo(() => {
+    if (isLikelyJwt(token)) {
+      return token;
+    }
+    const fromProfile = widgetConfig.backend?.tenantJwt?.trim();
+    return fromProfile && isLikelyJwt(fromProfile) ? fromProfile : '';
+  }, [token, widgetConfig.backend?.tenantJwt]);
+
+  const socketEnabled = Boolean(
+    tenantJwtForSocket && user?.id && selectedConversationId && selectedConversationId.trim() !== ''
+  );
+
+  const socket = useChatSocket(tenantJwtForSocket || undefined, user?.id, socketEnabled);
+
+  useEffect(() => {
+    setChatSocketInstance(socket ?? null);
+    return () => setChatSocketInstance(null);
+  }, [socket]);
 
   useEffect(() => {
     if (!isRecording) {
@@ -402,34 +416,32 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   }, [socket, selectedConversationId, messages, user]);
 
   useEffect(() => {
-    if (!socket || conversations.length === 0) {
-      return;
+    if (!socket || !selectedConversationId) {
+      return undefined;
     }
 
-    const joinAllConversations = (): void => {
-      conversations.forEach((conversation) => {
-        socket.emit(
-          'join_conversation',
-          { conversationId: conversation.id },
-          (response: SocketAck<{ conversationId: string }>) => {
-            if (!response.ok) {
-              useChatStore.getState().setError(response.error ?? 'Failed to join conversation');
-            }
-          }
-        );
+    const convId = selectedConversationId;
+
+    const joinActiveConversation = (): void => {
+      socket.emit('join_conversation', { conversationId: convId }, (response: unknown) => {
+        const ack = response as Partial<SocketAck<unknown>> | null;
+        if (ack && typeof ack === 'object' && 'ok' in ack && ack.ok === false) {
+          useChatStore.getState().setError(ack.error ?? 'Failed to join conversation');
+          return;
+        }
       });
     };
 
+    // Join on connect/reconnect (rooms are not preserved across reconnects).
+    socket.on('connect', joinActiveConversation);
     if (socket.connected) {
-      joinAllConversations();
-    } else {
-      socket.once('connect', joinAllConversations);
+      joinActiveConversation();
     }
 
     return () => {
-      socket.off('connect', joinAllConversations);
+      socket.off('connect', joinActiveConversation);
     };
-  }, [socket, conversations]);
+  }, [socket, selectedConversationId]);
 
   useEffect(() => {
     if (!token) {

@@ -1,43 +1,38 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { createChatSocket } from '../lib/chat-socket';
-import { conversationKeys } from '../services/conversations.service';
-import type { Message } from '../types/chat';
+import { isLikelyJwt } from '../utils/chat.utils';
 
-/** Socket.IO for Vitafy chat: tenant JWT + `ChatUser.id` + optional `X-Api-Key` / `auth.apiKey`. */
+/**
+ * Vitafy chat Socket.IO:
+ * - API key is required for handshake (`auth.apiKey` + `X-Api-Key` when available); sourced from `VITE_WIDGET_ACCESS_KEY` only
+ * - Tenant JWT must be provided as `handshake.auth.token` (we only connect when `tenantJwt` looks like a JWT)
+ *
+ * This hook only manages the socket instance lifecycle. Event subscriptions live in `useChatRuntime`.
+ */
 export function useChatSocket(
-  token: string | undefined,
-  chatUserId: string | undefined
+  tenantJwt: string | undefined,
+  chatUserId: string | undefined,
+  enabled: boolean
 ): Socket | null {
-  const qc = useQueryClient();
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    if (!token || !chatUserId) {
+    if (!enabled || !tenantJwt || !chatUserId || !isLikelyJwt(tenantJwt)) {
       setSocket(null);
       return undefined;
     }
 
-    const s = createChatSocket({ token, chatUserId });
-
-    const onMessage = (message: Message): void => {
-      void qc.invalidateQueries({ queryKey: conversationKeys.messages(message.conversationId) });
-      void qc.invalidateQueries({ queryKey: conversationKeys.list() });
-    };
-    s.on('message_received', onMessage);
-    s.on('message', onMessage);
+    const s = createChatSocket({ token: tenantJwt, chatUserId });
 
     setSocket(s);
 
     return () => {
-      s.off('message_received', onMessage);
-      s.off('message', onMessage);
-      s.removeAllListeners();
+      // Do not `removeAllListeners()` — `useChatRuntime` attaches handlers to this instance.
       s.disconnect();
       setSocket(null);
     };
-  }, [token, chatUserId, qc]);
+  }, [enabled, tenantJwt, chatUserId]);
 
   return socket;
 }

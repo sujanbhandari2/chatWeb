@@ -1,6 +1,5 @@
 export type SidebarHeaderProps = {
   title: string;
-  subtitle: string;
   onBack: () => void;
   backDisabled?: boolean;
   /** Defaults to "Back to chats". */
@@ -10,7 +9,6 @@ export type SidebarHeaderProps = {
 /** Header for people / new group / edit group rails with back control. */
 export function SidebarHeader({
   title,
-  subtitle,
   onBack,
   backDisabled = false,
   backAriaLabel = 'Back to chats',
@@ -28,7 +26,6 @@ export function SidebarHeader({
       </button>
       <div className="left-header-main">
         <h2>{title}</h2>
-        <p className="widget-people-subtitle">{subtitle}</p>
       </div>
     </div>
   );

@@ -76,7 +76,7 @@ export function WidgetUnauthenticatedContent({
   } = useForm<WidgetCreateUserFormValues>({
     resolver: zodResolver(widgetCreateUserSchema),
     defaultValues: {
-      providerId: 'ktmdpc',
+      providerId: 'widget',
       providerUserId: '',
       email: '',
       name: ''
@@ -91,6 +91,11 @@ export function WidgetUnauthenticatedContent({
         <h1>Vitafy Chat</h1>
         <p className="auth-subtitle">
           Create a chat user
+        </p>
+        <p className="auth-subtitle" style={{ fontSize: '0.85rem' }}>
+          Realtime (Socket.IO) needs a tenant JWT in <code>handshake.auth.token</code>. If your session token is not a
+          JWT, set <code>backend.tenantJwt</code> in the trusted widget init config (e.g. your dev profile in{' '}
+          <code>widget.config.ts</code>).
         </p>
 
         <form
