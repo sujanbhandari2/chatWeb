@@ -129,7 +129,7 @@ export const defaultWidgetInitConfig: WidgetInitConfig = widgetInitConfigSchema.
   interactions: {
     closeOnEscape: true,
     closeOnClickOutside: true,
-    defaultOpen: false,
+    defaultOpen: true,
     animationEnabled: true,
     animationDuration: 300,
   },

@@ -15,6 +15,11 @@ import { chatEmitWithAck, getChatSocket } from '../../utils/chat-socket-bridge';
 import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
 import { findDirectConversation } from './chatStore.utils';
+import type { TenantUser } from '../../types/chat';
+
+function isWidgetApiKeySessionToken(token: string): boolean {
+  return token === 'chat-api-key';
+}
 
 type SetChat = {
   (
@@ -76,11 +81,33 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
 
     refreshUsers: async () => {
       const data = await getTenantUsers();
-      get().setTenantUsers(data);
+      const me = useAuthStore.getState().user;
+      const selfId = (me?.id ?? '').trim();
+      const selfEmail = (me?.email ?? '').trim().toLowerCase();
+      const withoutSelf = data.filter((u: TenantUser) => {
+        if (selfId && String(u.id).trim() === selfId) {
+          return false;
+        }
+        if (selfEmail && u.email.trim().toLowerCase() === selfEmail) {
+          return false;
+        }
+        return true;
+      });
+      get().setTenantUsers(withoutSelf);
     },
 
     bootstrapChatApp: async () => {
+      const token = useAuthStore.getState().token;
       const [loadedConversations] = await Promise.all([get().refreshConversations(), get().refreshUsers()]);
+      // Widget-only chat session (no tenant JWT): start on People so the user picks who to chat with first.
+      const isWidgetApiKeySession = isWidgetApiKeySessionToken(token);
+      if (isWidgetApiKeySession) {
+        get().setWidgetRailPane(WidgetPanelType.PEOPLE);
+        get().setSelectedConversationId('');
+        get().setMessages([]);
+        return;
+      }
+
       const persistedConversationId = window.localStorage.getItem(SELECTED_CONVERSATION_STORAGE_KEY);
       const hasPersistedConversation =
         !!persistedConversationId &&
@@ -257,11 +284,27 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         return;
       }
       try {
-        const message = await chatEmitWithAck<Message>('send_message', {
-          conversationId: selectedConversationId,
-          type: 'TEXT' as MessageType,
-          content: text.trim()
-        });
+        const token = useAuthStore.getState().token;
+        const user = useAuthStore.getState().user;
+        const trimmed = text.trim();
+
+        let message: Message;
+        if (isWidgetApiKeySessionToken(token)) {
+          if (!user?.id) {
+            throw new Error('Missing chat user');
+          }
+          message = await conversationsApi.postConversationRestMessage(selectedConversationId, {
+            type: 'TEXT',
+            content: trimmed,
+            senderId: user.id
+          });
+        } else {
+          message = await chatEmitWithAck<Message>('send_message', {
+            conversationId: selectedConversationId,
+            type: 'TEXT' as MessageType,
+            content: trimmed
+          });
+        }
         get().upsertMessage(message);
         get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
         get().setText('');
@@ -272,17 +315,30 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
 
     handleSendUploadedMessage: async (file, type) => {
       const token = useAuthStore.getState().token;
+      const user = useAuthStore.getState().user;
       const { selectedConversationId } = get();
       if (!token || !selectedConversationId) {
         return;
       }
       try {
         const uploaded = await uploadFileRequest(file);
-        const message = await chatEmitWithAck<Message>('send_message', {
-          conversationId: selectedConversationId,
-          type,
-          content: uploaded.url
-        });
+        let message: Message;
+        if (isWidgetApiKeySessionToken(token)) {
+          if (!user?.id) {
+            throw new Error('Missing chat user');
+          }
+          message = await conversationsApi.postConversationRestMessage(selectedConversationId, {
+            type,
+            content: uploaded.url,
+            senderId: user.id
+          });
+        } else {
+          message = await chatEmitWithAck<Message>('send_message', {
+            conversationId: selectedConversationId,
+            type,
+            content: uploaded.url
+          });
+        }
         get().upsertMessage(message);
         get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
       } catch (err) {

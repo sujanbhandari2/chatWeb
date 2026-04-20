@@ -1,8 +1,8 @@
 import { API_PATHS } from '../constants/api.constant';
 import { apiService } from '../lib/api-service';
-import type { Conversation, MessagesPage } from '../types/chat';
-import type { VitafyConversationApi, VitafyMessagesPageApi } from '../types/vitafy.types';
-import { mapConversationFromApi, mapMessagesPageFromApi } from '../utils/vitafy-chat.utils';
+import type { Conversation, Message, MessagesPage } from '../types/chat';
+import type { VitafyConversationApi, VitafyMessageApi, VitafyMessagesPageApi } from '../types/vitafy.types';
+import { mapApiMessageToMessage, mapConversationFromApi, mapMessagesPageFromApi } from '../utils/vitafy-chat.utils';
 
 export const listConversations = (forUserId: string): Promise<Conversation[]> =>
   apiService
@@ -90,3 +90,11 @@ export const getMessagesPage = (
     )
     .then(mapMessagesPageFromApi);
 };
+
+export const postConversationRestMessage = (
+  conversationId: string,
+  body: { type: string; content: string; senderId: string }
+): Promise<Message> =>
+  apiService
+    .post<VitafyMessageApi>(API_PATHS.CHAT.conversationMessages(conversationId), body)
+    .then(mapApiMessageToMessage);

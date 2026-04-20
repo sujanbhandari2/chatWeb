@@ -12,18 +12,19 @@ export type CreateChatSocketOptions = {
  */
 export function createChatSocket({ token, chatUserId }: CreateChatSocketOptions): Socket {
   const apiKey = getChatApiKey();
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`
-  };
-  if (apiKey) {
-    headers['X-Api-Key'] = apiKey;
+  if (!apiKey) {
+    throw new Error('Missing X-Api-Key for realtime connection');
   }
+
+  // Note: browsers cannot set custom WebSocket headers; the server should read `auth.apiKey`.
+  // `extraHeaders` is still useful in non-browser environments and for polling transports.
+  const headers: Record<string, string> = { 'X-Api-Key': apiKey };
 
   return io(getResolvedSocketUrl(), {
     auth: {
       token,
       userId: chatUserId,
-      ...(apiKey ? { apiKey } : {})
+      apiKey
     },
     extraHeaders: headers,
     transports: ['websocket']

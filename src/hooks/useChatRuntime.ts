@@ -324,6 +324,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     newSocket.on('message_read', onRead);
 
     newSocket.on('connect_error', (connectionError) => {
+      console.error(connectionError);
       useChatStore.getState().setError(`Realtime connection failed: ${connectionError.message}`);
     });
 
