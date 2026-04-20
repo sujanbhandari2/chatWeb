@@ -137,7 +137,7 @@ export function ChatThreadView(): JSX.Element {
                 <div className="rail-menu-dropdown chat-header-dropdown" role="menu">
                   {features.editGroup && isGroupConversation(selectedConversation) && (
                     <button type="button" role="menuitem" className="rail-menu-item" onClick={() => openEditGroupModal()}>
-                      Edit group
+                      Add people
                     </button>
                   )}
                   {features.deleteConversation && !isGlobalConversation(selectedConversation) && (
@@ -237,7 +237,7 @@ export function ChatThreadView(): JSX.Element {
                                     Mark as read
                                   </button>
                                 )}
-                                {isMine && (
+                                {isMine && features.deleteMessage && (
                                   <button
                                     type="button"
                                     role="menuitem"

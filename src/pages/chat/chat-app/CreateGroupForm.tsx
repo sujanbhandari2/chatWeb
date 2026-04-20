@@ -27,7 +27,7 @@ export function CreateGroupForm(): JSX.Element {
   const formFields = (
     <>
       <label className="modal-field">
-        <span className="modal-label">Group name</span>
+        <span className="modal-label">Group name (local label)</span>
         <input
           className="modal-input"
           value={groupTitle}
@@ -36,6 +36,9 @@ export function CreateGroupForm(): JSX.Element {
           maxLength={120}
           required
         />
+        <span className="muted-text" style={{ display: 'block', marginTop: 6 }}>
+          Vitafy <code>POST /api/v1/chat/conversations</code> persists members only, not this title.
+        </span>
       </label>
 
       <div className="modal-field">

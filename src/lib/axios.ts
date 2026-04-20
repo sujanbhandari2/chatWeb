@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getApiBaseUrl, getChatApiKey, getResolvedApiTimeoutMs } from '../utils/runtime-endpoints.utils';
+import { useAdminAuthStore } from '../store/useAdminAuthStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from './api-error';
 
@@ -20,10 +21,30 @@ apiAxios.interceptors.request.use((config) => {
   if (timeoutMs !== undefined) {
     config.timeout = timeoutMs;
   }
-  const token = useAuthStore.getState().token;
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+
+  const url = config.url ?? '';
+  const method = (config.method ?? 'get').toLowerCase();
+  const isPublicAuthPost =
+    (url.includes('/v1/admin/login') || url.includes('/v1/auth/tenant/login')) && method === 'post';
+
+  if (isPublicAuthPost) {
+    delete config.headers.Authorization;
+  } else if (url.includes('/v1/admin/')) {
+    const adminToken = useAdminAuthStore.getState().token;
+    if (adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`;
+    } else {
+      delete config.headers.Authorization;
+    }
+  } else {
+    const tenantToken = useAuthStore.getState().token;
+    if (tenantToken) {
+      config.headers.Authorization = `Bearer ${tenantToken}`;
+    } else {
+      delete config.headers.Authorization;
+    }
   }
+
   const chatKey = getChatApiKey();
   if (chatKey && isVitafyChatPath(config.url)) {
     config.headers['X-Api-Key'] = chatKey;
@@ -49,7 +70,12 @@ apiAxios.interceptors.response.use(
     if (axios.isAxiosError(error)) {
       const status = error.response?.status ?? 0;
       if (status === 401) {
-        useAuthStore.getState().clearSession();
+        const reqUrl = error.config?.url ?? '';
+        if (reqUrl.includes('/v1/admin/')) {
+          useAdminAuthStore.getState().clearSession();
+        } else {
+          useAuthStore.getState().clearSession();
+        }
       }
       return Promise.reject(ApiError.fromAxios(error));
     }

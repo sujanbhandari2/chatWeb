@@ -26,7 +26,7 @@ function PeoplePanel({
     <>
       <SidebarHeader
         title="People"
-        subtitle="Everyone in your organization"
+        subtitle="Chat profiles for this tenant (GET /api/v1/chat/users)"
         onBack={navigateToChats}
       />
       <div className="left-rail-scroll left-rail-scroll--widget-order">
@@ -51,7 +51,7 @@ function NewGroupPanel({
     <>
       <SidebarHeader
         title="New group"
-        subtitle="Name the group and add at least two people. You are added automatically."
+        subtitle="Pick at least two other members. The Vitafy API stores participants only — this label is for your reference in the app."
         onBack={navigateToChatsFromNewGroup}
         backDisabled={creatingGroup}
       />
@@ -71,8 +71,8 @@ function EditGroupPanel({
   return (
     <>
       <SidebarHeader
-        title="Edit group"
-        subtitle="Rename the group, add people, or remove other members. Use Leave group below to exit yourself."
+        title="Add to group"
+        subtitle="Only adding members is supported (POST …/participants). Renaming, removing members, and leaving are not in the chat API."
         onBack={navigateToChatsFromEditGroup}
         backDisabled={editingGroup}
         backAriaLabel="Back to chat"

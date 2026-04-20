@@ -41,23 +41,18 @@ export function WidgetUnauthenticatedContent({
   return (
     <div className="auth-shell auth-shell--widget">
       <div className="auth-card">
-        <h1>Healthcare Chat</h1>
+        <h1>Vitafy Chat</h1>
         <p className="auth-subtitle">
-          Register uses <code>tenantId</code>, name, and email. Login uses a UUID <code>tenantId</code> and email,
-          matching server Zod schemas.
+          Sign in with tenant <strong>email</strong> and <strong>password</strong> (<code>POST /api/v1/auth/tenant/login</code>).
+          Chat uses your tenant JWT plus the configured <code>X-Api-Key</code> for realtime and REST.
         </p>
 
         {widgetMissingTenant && (
           <p className="error-banner">
-            Missing <code>tenantId</code>. Your host sets the default in <code>src/config/widget.config.ts</code>, or
-            customers can pass <code>tenantId</code> (or <code>tenant</code>) on the widget URL. API and socket URLs are
-            not customer-configurable.
+            Missing <code>tenantId</code> for embed routing. Set a default in <code>src/config/widget.config.ts</code> or
+            pass <code>tenantId</code> on the widget URL. API and socket URLs come from the build profile only.
           </p>
         )}
-
-        <div>
-          <h3>User is not authenticated and missing token or user</h3>
-        </div>
         <AuthForm widgetMode={true} widgetConfig={config} widgetMissingTenant={widgetMissingTenant} />
       </div>
     </div>

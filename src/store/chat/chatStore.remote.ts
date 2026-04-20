@@ -14,7 +14,7 @@ import { CLIENT_GOING_OFFLINE_EVENT } from '../../features/chat/chat.constants';
 import { chatEmitWithAck, getChatSocket } from '../../utils/chat-socket-bridge';
 import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
-import { conversationTitleForUser, findDirectConversation } from './chatStore.utils';
+import { findDirectConversation } from './chatStore.utils';
 
 type SetChat = {
   (
@@ -176,15 +176,9 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       }
       const {
         editGroupConversationId: convId,
-        editGroupTitle,
         editGroupParticipantIds,
         editGroupInitialParticipantIds: initialIds
       } = get();
-      const title = editGroupTitle.trim();
-      if (title.length < 1 || title.length > 120) {
-        get().setEditGroupError('Group name must be 1–120 characters.');
-        return;
-      }
       const initial = new Set(initialIds);
       const current = new Set(editGroupParticipantIds);
       const removedSelf = initial.has(user.id) && !current.has(user.id);
@@ -201,13 +195,6 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         const selectedConversation =
           get().conversations.find((conversation) => conversation.id === convId) ?? null;
         const convType = selectedConversation?.type ?? 'GROUP';
-
-        const titleChanged =
-          editGroupTitle.trim() !== (selectedConversation?.title?.trim() ?? '');
-        if (titleChanged) {
-          get().setEditGroupError('Renaming groups is not supported on this server.');
-          return;
-        }
 
         const added = [...current].filter((id) => !initial.has(id));
         const removed = [...initial].filter((id) => !current.has(id));
@@ -260,33 +247,8 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     },
 
     handleDeleteSelectedConversation: async () => {
-      const token = useAuthStore.getState().token;
-      const user = useAuthStore.getState().user;
-      const { conversations, selectedConversationId } = get();
-      const selectedConversation =
-        conversations.find((conversation) => conversation.id === selectedConversationId) ?? null;
-      if (!token || !selectedConversation || !user) {
-        return;
-      }
-      if (isGlobalConversation(selectedConversation)) {
-        window.alert('This channel cannot be deleted here.');
-        get().setChatHeaderMenuOpen(false);
-        return;
-      }
-      const label = conversationTitleForUser(selectedConversation, user);
-      if (!window.confirm(`Delete “${label}”? This removes the chat for you.`)) {
-        return;
-      }
-      get().setDeletingConversation(true);
       get().setChatHeaderMenuOpen(false);
-      get().setError('');
-      try {
-        get().setError('Deleting conversations is not supported on this server.');
-      } catch (err) {
-        get().setError(err instanceof Error ? err.message : 'Failed to delete conversation');
-      } finally {
-        get().setDeletingConversation(false);
-      }
+      get().setError('Deleting conversations is not supported by the Vitafy chat API.');
     },
 
     handleSendText: async () => {
