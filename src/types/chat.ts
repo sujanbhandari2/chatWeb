@@ -1,7 +1,7 @@
 /** Prisma conversation type enum — extend as backend adds values */
 export type ConversationType = string;
 
-export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE';
+export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE' | 'VIDEO' | 'FILE' | 'LINK' | 'OTHER';
 
 /** User returned from POST /api/auth/create */
 export interface AuthUser {

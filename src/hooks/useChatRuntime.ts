@@ -21,7 +21,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
-  const socket = useChatSocket(token || undefined);
+  const socket = useChatSocket(token || undefined, user?.id);
 
   const messageScrollerRef = useRef<HTMLElement | null>(null);
   const chatHeaderMenuRef = useRef<HTMLDivElement | null>(null);
@@ -267,20 +267,28 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     newSocket.on('connect', onSocketConnect);
     newSocket.on('disconnect', onSocketDisconnect);
 
-    newSocket.on('message_received', (message: Message) => {
+    const onInboundMessage = (message: Message): void => {
       const store = useChatStore.getState();
       const authUser = useAuthStore.getState().user;
       store.bumpConversationUpdatedAt(message.conversationId, message.createdAt);
 
       const isOwnMessage = message.senderId === authUser?.id;
       if (!isOwnMessage) {
-        newSocket.emit('mark_as_delivered', { messageId: message.id }, () => undefined);
+        newSocket.emit(
+          'message_delivered',
+          { conversationId: message.conversationId, messageId: message.id },
+          () => undefined
+        );
       }
 
       if (message.conversationId === store.selectedConversationId) {
         store.upsertMessage(message);
         if (!isOwnMessage) {
-          newSocket.emit('mark_as_read', { messageId: message.id }, () => undefined);
+          newSocket.emit(
+            'message_read',
+            { conversationId: message.conversationId, messageId: message.id },
+            () => undefined
+          );
         }
         return;
       }
@@ -291,7 +299,10 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
           [message.conversationId]: (previous[message.conversationId] ?? 0) + 1
         }));
       }
-    });
+    };
+
+    newSocket.on('message_received', onInboundMessage);
+    newSocket.on('message', onInboundMessage);
 
     const applyReactionFromSocket = useChatStore.getState().applyReactionFromSocket;
     newSocket.on('message_reacted', applyReactionFromSocket);
@@ -346,7 +357,8 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       newSocket.off('online_users', onOnlineUsersList);
       newSocket.off('connect', onSocketConnect);
       newSocket.off('disconnect', onSocketDisconnect);
-      newSocket.off('message_received');
+      newSocket.off('message_received', onInboundMessage);
+      newSocket.off('message', onInboundMessage);
       newSocket.off('message_reacted', applyReactionFromSocket);
       newSocket.off('reaction_added', applyReactionFromSocket);
       newSocket.off('message_deleted', onMessageDeleted);
@@ -371,11 +383,19 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       const readReceipts = message.readReceipts ?? [];
 
       if (!deliveredReceipts.some((item) => item.userId === user.id)) {
-        socket.emit('mark_as_delivered', { messageId: message.id }, () => undefined);
+        socket.emit(
+          'message_delivered',
+          { conversationId: selectedConversationId, messageId: message.id },
+          () => undefined
+        );
       }
 
       if (!readReceipts.some((item) => item.userId === user.id)) {
-        socket.emit('mark_as_read', { messageId: message.id }, () => undefined);
+        socket.emit(
+          'message_read',
+          { conversationId: selectedConversationId, messageId: message.id },
+          () => undefined
+        );
       }
     });
   }, [socket, selectedConversationId, messages, user]);

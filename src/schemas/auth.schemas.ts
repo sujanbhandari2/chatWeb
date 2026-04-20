@@ -3,6 +3,7 @@ import { z } from 'zod';
 const nameSchema = z.string().min(1).max(120);
 const emailSchema = z.string().email();
 
+/** Kept for compatibility; Vitafy tenants are provisioned by an admin (`api_doc.md`). */
 export const registerSchema = z.object({
   tenantId: z.string(),
   name: nameSchema,
@@ -10,8 +11,10 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  tenantId: z.string().uuid(),
-  email: emailSchema
+  email: emailSchema,
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  /** Widget URL / profile tenant hint — not sent to the login API. */
+  tenantId: z.string().optional()
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;

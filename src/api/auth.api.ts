@@ -1,10 +1,6 @@
 import { API_PATHS } from '../constants/api.constant';
 import { apiService } from '../lib/api-service';
-import type { LoginInput, RegisterInput } from '../schemas/auth.schemas';
-import type { CreateAccountResponse } from '../types/chat';
+import type { VitafyTenantLoginResponse } from '../types/vitafy.types';
 
-export const registerUser = (body: RegisterInput): Promise<CreateAccountResponse> =>
-  apiService.post<CreateAccountResponse>(API_PATHS.AUTH.CREATE, body);
-
-export const loginUser = (body: LoginInput): Promise<CreateAccountResponse> =>
-  apiService.post<CreateAccountResponse>(API_PATHS.AUTH.LOGIN, body);
+export const loginTenant = (body: { email: string; password: string }): Promise<VitafyTenantLoginResponse> =>
+  apiService.post<VitafyTenantLoginResponse>(API_PATHS.AUTH.TENANT_LOGIN, body);

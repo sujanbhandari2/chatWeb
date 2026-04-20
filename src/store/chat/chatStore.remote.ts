@@ -7,7 +7,6 @@ import { getTenantUsers } from '../../api/users.api';
 import { uploadFileRequest } from '../../api/upload.api';
 import { transcribeSpeechRequest, translateTextRequest } from '../../api/speech.api';
 import { fetchMediaBlob } from '../../utils/media.utils';
-import { ApiError } from '../../lib/api-error';
 import { isGlobalConversation, normalizeMessage } from '../../utils/chat.utils';
 import { WidgetPanelType, type Message, type MessageReaction, type MessageType } from '../../types/chat';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../../constants/session.constants';
@@ -23,8 +22,6 @@ type SetChat = {
     replace?: false | undefined
   ): void;
 };
-
-type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
 export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<ChatStore> {
   return {
@@ -67,7 +64,12 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     },
 
     refreshConversations: async () => {
-      const data = await conversationsApi.listConversations();
+      const user = useAuthStore.getState().user;
+      if (!user) {
+        get().setConversations([]);
+        return [];
+      }
+      const data = await conversationsApi.listConversations(user.id);
       get().setConversations(data);
       return data;
     },
@@ -119,7 +121,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           await get().selectConversation(existing.id);
           return;
         }
-        const createdConversation = await conversationsApi.createDirectConversation(target.id);
+        const createdConversation = await conversationsApi.createDirectConversation(user.id, target.id);
         await get().refreshConversations();
         get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().selectConversation(createdConversation.id);
@@ -151,7 +153,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setGroupModalError('');
       try {
         const participantIds = [...new Set([user.id, ...groupSelectedUserIds])];
-        const created = await conversationsApi.createGroupConversation(title, participantIds);
+        const created = await conversationsApi.createGroupConversation(title, user.id, participantIds);
         get().setWidgetRailPane(WidgetPanelType.CHATS);
         get().setGroupTitle('');
         get().setGroupSelectedUserIds([]);
@@ -196,30 +198,36 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setEditGroupError('');
 
       try {
-        await conversationsApi.updateConversationById(convId, { title });
+        const selectedConversation =
+          get().conversations.find((conversation) => conversation.id === convId) ?? null;
+        const convType = selectedConversation?.type ?? 'GROUP';
+
+        const titleChanged =
+          editGroupTitle.trim() !== (selectedConversation?.title?.trim() ?? '');
+        if (titleChanged) {
+          get().setEditGroupError('Renaming groups is not supported on this server.');
+          return;
+        }
 
         const added = [...current].filter((id) => !initial.has(id));
         const removed = [...initial].filter((id) => !current.has(id));
         const removedOthers = removed.filter((id) => id !== user.id);
 
+        if (removedOthers.length > 0 || removedSelf) {
+          get().setEditGroupError('Removing members is not supported on this server.');
+          return;
+        }
+
         if (added.length > 0) {
-          await conversationsApi.addConversationParticipants(convId, added);
-        }
-        for (const uid of removedOthers) {
-          await conversationsApi.removeConversationParticipant(convId, uid);
-        }
-        if (removedSelf) {
-          await conversationsApi.removeConversationParticipant(convId, user.id);
+          await conversationsApi.addConversationParticipants(convId, added, {
+            actorUserId: user.id,
+            conversationType: convType
+          });
         }
 
         get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().refreshConversations();
-        if (removedSelf) {
-          get().setSelectedConversationId('');
-          get().setMessages([]);
-        } else {
-          await get().selectConversation(convId);
-        }
+        await get().selectConversation(convId);
       } catch (err) {
         get().setEditGroupError(err instanceof Error ? err.message : 'Failed to update group');
       } finally {
@@ -243,11 +251,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setEditGroupSaving(true);
       get().setEditGroupError('');
       try {
-        await conversationsApi.removeConversationParticipant(convId, user.id);
-        get().setWidgetRailPane(WidgetPanelType.CHATS);
-        await get().refreshConversations();
-        get().setSelectedConversationId('');
-        get().setMessages([]);
+        get().setEditGroupError('Leaving a group is not supported on this server.');
       } catch (err) {
         get().setEditGroupError(err instanceof Error ? err.message : 'Could not leave group');
       } finally {
@@ -277,11 +281,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       get().setChatHeaderMenuOpen(false);
       get().setError('');
       try {
-        const id = selectedConversation.id;
-        await conversationsApi.deleteConversationById(id);
-        await get().refreshConversations();
-        get().setSelectedConversationId('');
-        get().setMessages([]);
+        get().setError('Deleting conversations is not supported on this server.');
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to delete conversation');
       } finally {
@@ -379,26 +379,6 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       };
 
       void (async (): Promise<void> => {
-        if (token) {
-          try {
-            const updated = await conversationsApi.addMessageReaction(conversationId, messageId, emoji);
-            if (updated && typeof updated === 'object' && 'id' in updated && updated.id === messageId) {
-              get().setMessages((previous) =>
-                previous.map((m) => (m.id === messageId ? normalizeMessage(updated) : m))
-              );
-              return;
-            }
-          } catch (err) {
-            const skipSocket =
-              err instanceof ApiError && [404, 405, 501].includes(err.status);
-            if (!skipSocket) {
-              revertOptimistic();
-              get().setError(err instanceof Error ? err.message : 'Failed to react');
-              return;
-            }
-          }
-        }
-
         const socket = getChatSocket();
         if (!socket?.connected) {
           revertOptimistic();
@@ -406,51 +386,30 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           return;
         }
 
-        socket.emit(
-          'react_to_message',
-          {
+        try {
+          await chatEmitWithAck<unknown>('react_message', {
             messageId,
             conversationId,
-            emoji,
             reactionType: emoji
-          },
-          (response?: SocketAck<unknown>) => {
-            if (response === undefined) {
-              return;
-            }
-            if (!response.ok) {
-              revertOptimistic();
-              get().setError(response.error ?? 'Failed to react');
-              return;
-            }
-            const data = response.data;
-            if (
-              data &&
-              typeof data === 'object' &&
-              'reactions' in data &&
-              'id' in data &&
-              (data as Message).id === messageId
-            ) {
-              get().setMessages((previous) =>
-                previous.map((m) => (m.id === messageId ? normalizeMessage(data as Message) : m))
-              );
-            }
-          }
-        );
+          });
+        } catch (err) {
+          revertOptimistic();
+          get().setError(err instanceof Error ? err.message : 'Failed to react');
+        }
       })();
     },
 
-    handleDelete: async (messageId) => {
-      try {
-        await chatEmitWithAck('delete_message', { messageId });
-      } catch (err) {
-        get().setError(err instanceof Error ? err.message : 'Failed to delete message');
-      }
+    handleDelete: async (_messageId: string) => {
+      get().setError('Deleting messages is not supported on this server.');
     },
 
     handleMarkRead: async (messageId) => {
+      const conversationId = get().selectedConversationId;
+      if (!conversationId) {
+        return;
+      }
       try {
-        await chatEmitWithAck('mark_as_read', { messageId });
+        await chatEmitWithAck('message_read', { conversationId, messageId });
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to mark as read');
       }

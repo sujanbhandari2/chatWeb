@@ -1,11 +1,18 @@
 import axios from 'axios';
-import { getApiBaseUrl, getResolvedApiTimeoutMs } from '../utils/runtime-endpoints.utils';
+import { getApiBaseUrl, getChatApiKey, getResolvedApiTimeoutMs } from '../utils/runtime-endpoints.utils';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from './api-error';
 
 export const apiAxios = axios.create({
   headers: { 'Content-Type': 'application/json' }
 });
+
+function isVitafyChatPath(url: string | undefined): boolean {
+  if (!url) {
+    return false;
+  }
+  return url.includes('/v1/chat/');
+}
 
 apiAxios.interceptors.request.use((config) => {
   config.baseURL = getApiBaseUrl();
@@ -17,11 +24,27 @@ apiAxios.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const chatKey = getChatApiKey();
+  if (chatKey && isVitafyChatPath(config.url)) {
+    config.headers['X-Api-Key'] = chatKey;
+  }
   return config;
 });
 
 apiAxios.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const body = response.data;
+    if (
+      body &&
+      typeof body === 'object' &&
+      'success' in body &&
+      (body as { success: unknown }).success === true &&
+      'data' in body
+    ) {
+      return { ...response, data: (body as { data: unknown }).data };
+    }
+    return response;
+  },
   (error) => {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status ?? 0;

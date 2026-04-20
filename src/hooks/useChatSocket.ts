@@ -5,34 +5,39 @@ import { createChatSocket } from '../lib/chat-socket';
 import { conversationKeys } from '../services/conversations.service';
 import type { Message } from '../types/chat';
 
-/** Creates a single Socket.IO connection for the auth token; disconnects on token change/unmount. */
-export function useChatSocket(token: string | undefined): Socket | null {
+/** Socket.IO for Vitafy chat: tenant JWT + `ChatUser.id` + optional `X-Api-Key` / `auth.apiKey`. */
+export function useChatSocket(
+  token: string | undefined,
+  chatUserId: string | undefined
+): Socket | null {
   const qc = useQueryClient();
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    if (!token) {
+    if (!token || !chatUserId) {
       setSocket(null);
       return undefined;
     }
 
-    const s = createChatSocket(token);
+    const s = createChatSocket({ token, chatUserId });
 
-    const onMessageReceived = (message: Message): void => {
+    const onMessage = (message: Message): void => {
       void qc.invalidateQueries({ queryKey: conversationKeys.messages(message.conversationId) });
       void qc.invalidateQueries({ queryKey: conversationKeys.list() });
     };
-    s.on('message_received', onMessageReceived);
+    s.on('message_received', onMessage);
+    s.on('message', onMessage);
 
     setSocket(s);
 
     return () => {
-      s.off('message_received', onMessageReceived);
+      s.off('message_received', onMessage);
+      s.off('message', onMessage);
       s.removeAllListeners();
       s.disconnect();
       setSocket(null);
     };
-  }, [token, qc]);
+  }, [token, chatUserId, qc]);
 
   return socket;
 }

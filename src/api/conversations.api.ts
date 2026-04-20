@@ -1,38 +1,82 @@
 import { API_PATHS } from '../constants/api.constant';
 import { apiService } from '../lib/api-service';
-import type { Conversation, Message, MessagesPage } from '../types/chat';
+import type { Conversation, MessagesPage } from '../types/chat';
+import type { VitafyConversationApi, VitafyMessagesPageApi } from '../types/vitafy.types';
+import { mapConversationFromApi, mapMessagesPageFromApi } from '../utils/vitafy-chat.utils';
 
-export const listConversations = (): Promise<Conversation[]> =>
-  apiService.get<{ data: Conversation[] }>(API_PATHS.CONVERSATIONS).then((r) => r.data);
+export const listConversations = (forUserId: string): Promise<Conversation[]> =>
+  apiService
+    .get<VitafyConversationApi[]>(
+      `${API_PATHS.CHAT.CONVERSATIONS}?forUserId=${encodeURIComponent(forUserId)}`
+    )
+    .then((rows) => rows.map(mapConversationFromApi));
 
 export const createConversation = (participantIds: string[]): Promise<Conversation> =>
-  apiService.post<Conversation>(API_PATHS.CONVERSATIONS, { participantIds });
+  apiService
+    .post<VitafyConversationApi>(API_PATHS.CHAT.CONVERSATIONS, {
+      type: 'DIRECT',
+      participantIds
+    })
+    .then(mapConversationFromApi);
 
-export const createDirectConversation = (userId: string): Promise<Conversation> =>
-  apiService.post<Conversation>(`${API_PATHS.CONVERSATIONS}/direct`, { userId });
+export const createDirectConversation = (
+  currentChatUserId: string,
+  otherChatUserId: string
+): Promise<Conversation> =>
+  apiService
+    .post<VitafyConversationApi>(API_PATHS.CHAT.CONVERSATIONS, {
+      type: 'DIRECT',
+      participantIds: [currentChatUserId, otherChatUserId].filter(
+        (id, i, arr) => arr.indexOf(id) === i
+      )
+    })
+    .then(mapConversationFromApi);
 
-export const createGroupConversation = (title: string, participantIds: string[]): Promise<Conversation> =>
-  apiService.post<Conversation>(`${API_PATHS.CONVERSATIONS}/group`, { title, participantIds });
+/** Title is accepted for UI compatibility but is not persisted by the Vitafy chat API. */
+export const createGroupConversation = (
+  _title: string,
+  creatorUserId: string,
+  participantIdsIncludingSelf: string[]
+): Promise<Conversation> => {
+  const extra = participantIdsIncludingSelf.filter((id) => id !== creatorUserId);
+  return apiService
+    .post<VitafyConversationApi>(API_PATHS.CHAT.CONVERSATIONS, {
+      type: 'GROUP',
+      creatorUserId,
+      participantIds: extra
+    })
+    .then(mapConversationFromApi);
+};
 
-export const deleteConversationById = (conversationId: string): Promise<void> =>
-  apiService.delete<void>(`${API_PATHS.CONVERSATIONS}/${conversationId}`);
+export const deleteConversationById = (_conversationId: string): Promise<void> =>
+  Promise.reject(new Error('Deleting conversations is not supported by this API.'));
 
 export const updateConversationById = (
-  conversationId: string,
-  body: { title: string }
-): Promise<Conversation> => apiService.patch<Conversation>(`${API_PATHS.CONVERSATIONS}/${conversationId}`, body);
-
-export const addConversationParticipants = (
-  conversationId: string,
-  userIds: string[]
+  _conversationId: string,
+  _body: { title: string }
 ): Promise<Conversation> =>
-  apiService.post<Conversation>(`${API_PATHS.CONVERSATIONS}/${conversationId}/participants`, { userIds });
+  Promise.reject(new Error('Renaming conversations is not supported by this API.'));
+
+export const addConversationParticipants = async (
+  conversationId: string,
+  userIds: string[],
+  options: { actorUserId?: string; conversationType: string }
+): Promise<void> => {
+  const isGroup = options.conversationType === 'GROUP';
+  for (const userId of userIds) {
+    const body: { userId: string; actorUserId?: string } = { userId };
+    if (isGroup && options.actorUserId) {
+      body.actorUserId = options.actorUserId;
+    }
+    await apiService.post(API_PATHS.CHAT.conversationParticipants(conversationId), body);
+  }
+};
 
 export const removeConversationParticipant = (
-  conversationId: string,
-  userId: string
+  _conversationId: string,
+  _userId: string
 ): Promise<void> =>
-  apiService.delete<void>(`${API_PATHS.CONVERSATIONS}/${conversationId}/participants/${userId}`);
+  Promise.reject(new Error('Removing participants is not supported by this API.'));
 
 export const getMessagesPage = (
   conversationId: string,
@@ -40,30 +84,9 @@ export const getMessagesPage = (
   pageSize = 50
 ): Promise<MessagesPage> => {
   const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  return apiService.get<MessagesPage>(
-    `${API_PATHS.CONVERSATIONS}/${conversationId}/messages?${query.toString()}`
-  );
-};
-
-export const addMessageReaction = (
-  conversationId: string,
-  messageId: string,
-  emoji: string
-): Promise<Message> =>
-  apiService
-    .post<Message | { data: Message }>(
-      `${API_PATHS.CONVERSATIONS}/${conversationId}/messages/${messageId}/reactions`,
-      { emoji, reactionType: emoji }
+  return apiService
+    .get<VitafyMessagesPageApi>(
+      `${API_PATHS.CHAT.conversationMessages(conversationId)}?${query.toString()}`
     )
-    .then((raw) => {
-      if (
-        raw &&
-        typeof raw === 'object' &&
-        'data' in raw &&
-        raw.data &&
-        typeof (raw as { data: Message }).data.id === 'string'
-      ) {
-        return (raw as { data: Message }).data;
-      }
-      return raw as Message;
-    });
+    .then(mapMessagesPageFromApi);
+};

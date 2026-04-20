@@ -10,6 +10,8 @@ interface ImportMetaEnv {
   readonly VITE_WIDGET_PROFILE?: string;
   /** Injected from `package.json` version at build time (`vite.config.ts`). */
   readonly VITE_APP_VERSION: string;
+  /** Vitafy chat: `accessKey:secretKey` for `/v1/chat/*` REST and Socket.IO (`api_doc.md`). */
+  readonly VITE_WIDGET_ACCESS_KEY?: string;
 }
 
 declare global {

@@ -1,11 +1,21 @@
-/** Relative to API base (includes `/api` prefix in baseURL). */
+/** Relative to API base (`getApiBaseUrl()` — includes `/api`). Vitafy: `/api/v1/...` (`api_doc.md`). */
 export const API_PATHS = {
   AUTH: {
-    CREATE: '/auth/create',
-    LOGIN: '/auth/login'
+    TENANT_LOGIN: '/v1/auth/tenant/login'
   },
-  CONVERSATIONS: '/conversations',
-  USERS: '/users',
+  SYSTEM: {
+    HEALTH: '/v1/system/health'
+  },
+  CHAT: {
+    TENANT: '/v1/chat/tenant',
+    USERS: '/v1/chat/users',
+    CONVERSATIONS: '/v1/chat/conversations',
+    conversationParticipants: (conversationId: string) =>
+      `/v1/chat/conversations/${conversationId}/participants`,
+    conversationMessages: (conversationId: string) =>
+      `/v1/chat/conversations/${conversationId}/messages`
+  },
+  /** Legacy non-Vitafy uploads / speech (unchanged paths). */
   UPLOAD: '/upload',
   SPEECH: {
     TRANSCRIBE: '/speech/transcribe',

@@ -11,10 +11,16 @@ export const conversationKeys = {
 
 export const useConversationsQuery = () => {
   const token = useAuthStore((s) => s.token);
+  const userId = useAuthStore((s) => s.user?.id);
   return useQuery({
     queryKey: conversationKeys.list(),
-    queryFn: () => conversationsApi.listConversations(),
-    enabled: !!token
+    queryFn: () => {
+      if (!userId) {
+        return Promise.resolve([]);
+      }
+      return conversationsApi.listConversations(userId);
+    },
+    enabled: !!token && !!userId
   });
 };
 
@@ -50,17 +56,28 @@ export const usePrefetchMessages = () => {
 
 export const useCreateDirectConversationMutation = () => {
   const qc = useQueryClient();
+  const selfId = useAuthStore((s) => s.user?.id);
   return useMutation({
-    mutationFn: (userId: string) => conversationsApi.createDirectConversation(userId),
+    mutationFn: (otherUserId: string) => {
+      if (!selfId) {
+        return Promise.reject(new Error('Not signed in'));
+      }
+      return conversationsApi.createDirectConversation(selfId, otherUserId);
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };
 
 export const useCreateGroupConversationMutation = () => {
   const qc = useQueryClient();
+  const selfId = useAuthStore((s) => s.user?.id);
   return useMutation({
-    mutationFn: ({ title, participantIds }: { title: string; participantIds: string[] }) =>
-      conversationsApi.createGroupConversation(title, participantIds),
+    mutationFn: ({ title, participantIds }: { title: string; participantIds: string[] }) => {
+      if (!selfId) {
+        return Promise.reject(new Error('Not signed in'));
+      }
+      return conversationsApi.createGroupConversation(title, selfId, participantIds);
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };
@@ -85,8 +102,21 @@ export const useUpdateConversationMutation = () => {
 export const useAddParticipantsMutation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ conversationId, userIds }: { conversationId: string; userIds: string[] }) =>
-      conversationsApi.addConversationParticipants(conversationId, userIds),
+    mutationFn: ({
+      conversationId,
+      userIds,
+      actorUserId,
+      conversationType
+    }: {
+      conversationId: string;
+      userIds: string[];
+      actorUserId?: string;
+      conversationType: string;
+    }) =>
+      conversationsApi.addConversationParticipants(conversationId, userIds, {
+        actorUserId,
+        conversationType
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: conversationKeys.list() })
   });
 };

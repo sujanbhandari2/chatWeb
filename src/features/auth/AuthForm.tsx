@@ -1,13 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  loginSchema,
-  registerSchema,
-  type LoginInput,
-  type RegisterInput
-} from '../../schemas/auth.schemas';
-import { useLoginMutation, useRegisterMutation } from '../../services/auth.service';
+import { loginSchema, type LoginInput } from '../../schemas/auth.schemas';
+import { useLoginMutation } from '../../services/auth.service';
 import type { WidgetInitConfig } from '../../schemas/widget.schemas';
 
 export type AuthFormProps = {
@@ -23,64 +18,14 @@ function authErrorMessage(err: unknown): string {
   return 'Authentication failed';
 }
 
-function RegisterFields({
-  defaultTenantId,
-  hideTenant,
-  lockTenant,
-  disabled
-}: {
-  defaultTenantId: string;
-  hideTenant: boolean;
-  lockTenant: boolean;
-  disabled: boolean;
-}): JSX.Element {
-  const mutation = useRegisterMutation();
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors }
-  } = useForm<RegisterInput>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: { tenantId: defaultTenantId, name: '', email: '' }
-  });
-
-  useEffect(() => {
-    reset((prev) => ({ ...prev, tenantId: defaultTenantId }));
-  }, [defaultTenantId, reset]);
-
+function RegisterInfoPanel(): JSX.Element {
   return (
-    <form
-      className="auth-form"
-      onSubmit={handleSubmit(async (data) => {
-        try {
-          await mutation.mutateAsync(data);
-        } catch {
-          /* mutation.error below */
-        }
-      })}
-    >
-      {hideTenant ? (
-        <input type="hidden" {...register('tenantId')} />
-      ) : (
-        <input
-          {...register('tenantId')}
-          placeholder="Tenant ID"
-          required
-          disabled={disabled}
-          readOnly={lockTenant}
-        />
-      )}
-      {errors.tenantId && <p className="error-banner">{errors.tenantId.message}</p>}
-      <input {...register('name')} placeholder="Name" required maxLength={120} disabled={disabled} />
-      {errors.name && <p className="error-banner">{errors.name.message}</p>}
-      <input {...register('email')} placeholder="Email" type="email" required disabled={disabled} />
-      {errors.email && <p className="error-banner">{errors.email.message}</p>}
-      <button type="submit" disabled={disabled || mutation.isPending}>
-        {mutation.isPending ? 'Creating account...' : 'Create account'}
-      </button>
-      {mutation.isError && <p className="error-banner">{authErrorMessage(mutation.error)}</p>}
-    </form>
+    <div className="auth-form auth-form--info">
+      <p>
+        Tenant accounts are created by your Vitafy administrator. If you already have an email and
+        password, switch to <strong>Login</strong>.
+      </p>
+    </div>
   );
 }
 
@@ -103,7 +48,7 @@ function LoginFields({
     formState: { errors }
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { tenantId: defaultTenantId, email: '' }
+    defaultValues: { tenantId: defaultTenantId, email: '', password: '' }
   });
 
   useEffect(() => {
@@ -121,20 +66,30 @@ function LoginFields({
         }
       })}
     >
-      {hideTenant ? (
-        <input type="hidden" {...register('tenantId')} />
-      ) : (
-        <input
-          {...register('tenantId')}
-          placeholder="Tenant ID (UUID)"
-          required
-          disabled={disabled}
-          readOnly={lockTenant}
-        />
+      {!hideTenant && (
+        <>
+          <input
+            {...register('tenantId')}
+            placeholder="Tenant ID (optional, embed routing)"
+            disabled={disabled}
+            readOnly={lockTenant}
+          />
+          {errors.tenantId && <p className="error-banner">{errors.tenantId.message}</p>}
+        </>
       )}
-      {errors.tenantId && <p className="error-banner">{errors.tenantId.message}</p>}
+      {hideTenant && <input type="hidden" {...register('tenantId')} />}
       <input {...register('email')} placeholder="Email" type="email" required disabled={disabled} />
       {errors.email && <p className="error-banner">{errors.email.message}</p>}
+      <input
+        {...register('password')}
+        placeholder="Password"
+        type="password"
+        required
+        minLength={8}
+        autoComplete="current-password"
+        disabled={disabled}
+      />
+      {errors.password && <p className="error-banner">{errors.password.message}</p>}
       <button type="submit" disabled={disabled || mutation.isPending}>
         {mutation.isPending ? 'Signing in...' : 'Login'}
       </button>
@@ -144,7 +99,7 @@ function LoginFields({
 }
 
 export function AuthForm({ widgetMode = false, widgetConfig, widgetMissingTenant }: AuthFormProps): JSX.Element {
-  const [mode, setMode] = useState<'register' | 'login'>('register');
+  const [mode, setMode] = useState<'register' | 'login'>('login');
   const hideTenant = Boolean(widgetMode && widgetConfig?.backend?.hideTenantField);
   const lockTenant = Boolean(
     widgetMode && (widgetConfig?.backend?.lockTenant || widgetConfig?.backend?.hideTenantField)
@@ -174,12 +129,7 @@ export function AuthForm({ widgetMode = false, widgetConfig, widgetMissingTenant
       </div>
 
       {mode === 'register' ? (
-        <RegisterFields
-          defaultTenantId={defaultTenantId}
-          hideTenant={hideTenant}
-          lockTenant={lockTenant}
-          disabled={widgetMissingTenant}
-        />
+        <RegisterInfoPanel />
       ) : (
         <LoginFields
           defaultTenantId={defaultTenantId}
