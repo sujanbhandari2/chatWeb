@@ -325,17 +325,17 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       store.bumpConversationUpdatedAt(message.conversationId, message.createdAt);
 
       const isOwnMessage = message.senderId === authUser?.id;
-      if (!isOwnMessage) {
-        newSocket.emit(
-          'message_delivered',
-          { conversationId: message.conversationId, messageId: message.id },
-          () => undefined
-        );
-      }
+      const isActiveThread = message.conversationId === store.selectedConversationId;
 
-      if (message.conversationId === store.selectedConversationId) {
+      // Receipt emits are only valid after `join_conversation` for that id — avoid Unauthorized on inbox traffic.
+      if (isActiveThread) {
         store.upsertMessage(message);
         if (!isOwnMessage) {
+          newSocket.emit(
+            'message_delivered',
+            { conversationId: message.conversationId, messageId: message.id },
+            () => undefined
+          );
           newSocket.emit(
             'message_read',
             { conversationId: message.conversationId, messageId: message.id },
@@ -480,18 +480,6 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       socket.off('connect', joinActiveConversation);
     };
   }, [socket, selectedConversationId]);
-
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      void useChatStore.getState().refreshUsers();
-    }, 8000);
-
-    return () => window.clearInterval(interval);
-  }, [token]);
 
   useEffect(() => {
     if (!token || !user) {
