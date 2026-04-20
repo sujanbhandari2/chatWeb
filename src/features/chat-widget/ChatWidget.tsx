@@ -1,8 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { resolveWidgetShellSections, type WidgetInitConfig } from '../../schemas/widget.schemas';
+import type { AuthUser } from '../../types/chat';
 import { applyWidgetCssVariables } from '../../utils/widget-css-variables.utils';
 import { postWidgetEmbedResizeToParent } from '../../utils/widget-embed-resize.utils';
+import { userDisplayName, userInitials } from '../../utils/chat.utils';
 
 function cn(...parts: Array<string | undefined | false>): string {
   return parts.filter(Boolean).join(' ');
@@ -12,6 +14,8 @@ export type WidgetChatProps = {
   config: WidgetInitConfig;
   children: ReactNode;
   panelHeaderCenterText?: string;
+  /** Shown compact, immediately left of the panel close control */
+  panelHeaderUser?: AuthUser;
 };
 
 function getFocusableElements(root: HTMLElement): HTMLElement[] {
@@ -27,7 +31,7 @@ function isHorizontalLeft(position: string): boolean {
 }
 
 /** Floating chat button and slide-out panel; renders `children` inside the panel. */
-export function WidgetChat({ config, children, panelHeaderCenterText }: WidgetChatProps): JSX.Element {
+export function WidgetChat({ config, children, panelHeaderCenterText, panelHeaderUser }: WidgetChatProps): JSX.Element {
   const panelId = useId().replace(/:/g, '');
   const rootRef = useRef<HTMLDivElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -233,6 +237,19 @@ export function WidgetChat({ config, children, panelHeaderCenterText }: WidgetCh
                 aria-hidden
               />
             )}
+            {panelHeaderUser ? (
+              <div
+                className={cn('vcw-panel-header-profile', `${brandPrefix}-panel-header-profile`)}
+                aria-label={`Signed in as ${userDisplayName({ name: panelHeaderUser.name, email: panelHeaderUser.email })}`}
+              >
+                <div className={cn('vcw-panel-header-avatar', `${brandPrefix}-panel-header-avatar`)} aria-hidden>
+                  {userInitials({ name: panelHeaderUser.name, email: panelHeaderUser.email })}
+                </div>
+                <span className={cn('vcw-panel-header-name', `${brandPrefix}-panel-header-name`)}>
+                  {userDisplayName({ name: panelHeaderUser.name, email: panelHeaderUser.email })}
+                </span>
+              </div>
+            ) : null}
             <button
               type="button"
               className={cn('vcw-panel-close', `${brandPrefix}-panel-close`)}

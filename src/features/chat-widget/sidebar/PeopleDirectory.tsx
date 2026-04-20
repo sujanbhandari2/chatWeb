@@ -83,7 +83,7 @@ function PersonListItem({ person, isOpening, onOpenChat }: PersonListItemProps):
       <div className="quick-user-meta">
         <strong>{displayName}</strong>
         <span>
-          {person.status ?? '—'} · {person.isOnline ? 'Active' : 'Away'}
+          {person.status ?? '—'} · {person.isOnline ? 'Online' : 'Offline'}
         </span>
         <span className="quick-user-email">{person.email}</span>
       </div>

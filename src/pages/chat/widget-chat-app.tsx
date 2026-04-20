@@ -41,6 +41,7 @@ export default function WidgetChatApp({ widgetConfig }: WidgetChatAppProps): JSX
       overlayVisible={overlayVisible}
       selectedConversationId={selectedConversationId}
       currentPanel={currentPanel}
+      user={user}
       sidebar={<ChatSidebar />}
       thread={<ChatThreadView />}
     />

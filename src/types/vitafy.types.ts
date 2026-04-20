@@ -18,6 +18,9 @@ export type VitafyChatUserRow = {
   status: string;
   createdAt?: string;
   updatedAt?: string;
+  /** Present on `GET /v1/chat/users` — live directory presence */
+  isOnline?: boolean;
+  is_online?: boolean;
 };
 
 export type VitafyConversationParticipantApi = {

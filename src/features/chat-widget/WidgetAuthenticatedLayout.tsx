@@ -12,6 +12,7 @@ export function WidgetAuthenticatedLayout({
   overlayVisible,
   selectedConversationId,
   currentPanel,
+  user,
   sidebar,
   thread
 }: WidgetAuthenticatedLayoutProps): JSX.Element {
@@ -35,6 +36,7 @@ export function WidgetAuthenticatedLayout({
         </div>
       </WidgetInitConfigProvider>
     </ChatRuntimeProvider>,
-    headerLabel
+    headerLabel,
+    user
   );
 }

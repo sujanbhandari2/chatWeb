@@ -12,10 +12,15 @@ import { WidgetChat } from './ChatWidget';
 export function wrapWidgetContent(
   config: WidgetInitConfig,
   content: ReactNode,
-  panelHeaderCenterText?: string
+  panelHeaderCenterText?: string,
+  panelHeaderUser?: AuthUser
 ): JSX.Element {
   return (
-    <WidgetChat config={config} panelHeaderCenterText={panelHeaderCenterText}>
+    <WidgetChat
+      config={config}
+      panelHeaderCenterText={panelHeaderCenterText}
+      panelHeaderUser={panelHeaderUser}
+    >
       {content}
     </WidgetChat>
   );
@@ -76,7 +81,7 @@ export function WidgetUnauthenticatedContent({
   } = useForm<WidgetCreateUserFormValues>({
     resolver: zodResolver(widgetCreateUserSchema),
     defaultValues: {
-      providerId: 'widget',
+      providerId: 'ktmdpc',
       providerUserId: '',
       email: '',
       name: ''

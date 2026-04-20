@@ -148,7 +148,7 @@ export function useConversationSubtitleGetter(): (conversation: Conversation) =>
       }
       if (others.length === 1) {
         const online = isPeerOnline(others[0].userId);
-        return online ? 'Direct · Online' : 'Direct · Away';
+        return online ? 'Direct · Online' : 'Direct · Offline';
       }
       if (others.length === 0) {
         return 'Only you';

@@ -14,6 +14,16 @@ import type {
   VitafyMessagesPageApi
 } from '../types/vitafy.types';
 
+function pickChatUserOnlineFlag(row: VitafyChatUserRow): boolean {
+  if (typeof row.isOnline === 'boolean') {
+    return row.isOnline;
+  }
+  if (typeof row.is_online === 'boolean') {
+    return row.is_online;
+  }
+  return false;
+}
+
 export function mapChatUserToTenantUser(row: VitafyChatUserRow): TenantUser {
   return {
     id: row.id,
@@ -23,7 +33,7 @@ export function mapChatUserToTenantUser(row: VitafyChatUserRow): TenantUser {
     avatarUrl: null,
     status: row.status,
     createdAt: row.createdAt ?? new Date().toISOString(),
-    isOnline: false
+    isOnline: pickChatUserOnlineFlag(row)
   };
 }
 

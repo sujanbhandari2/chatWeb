@@ -37,6 +37,7 @@ export type WidgetAuthenticatedLayoutProps = {
   overlayVisible: boolean;
   selectedConversationId: string;
   currentPanel: WidgetPanelType;
+  user: AuthUser;
   sidebar: ReactNode;
   thread: ReactNode;
 };
