@@ -53,7 +53,9 @@ export const chatInitialState = {
   widgetChatSearchQuery: '',
   widgetInboxMenuOpen: false,
   recordingDurationMs: 0,
-  messageSpeechUi: {} as Record<string, MessageSpeechUiState>
+  messageSpeechUi: {} as Record<string, MessageSpeechUiState>,
+  /** Other participants currently typing in the selected thread (from `user_typing`). */
+  remoteTypingUserIds: [] as string[]
 };
 
 export type ChatState = typeof chatInitialState;
@@ -113,6 +115,9 @@ export type ChatActions = {
   applyMessageDeleted: (payload: { messageId: string; conversationId: string; deletedAt: string }) => void;
   applyDeliveredReceipt: (receipt: DeliveredReceipt & { conversationId?: string }) => void;
   applyReadReceipt: (receipt: ReadReceipt & { conversationId?: string }) => void;
+  clearRemoteTypingPeers: () => void;
+  applyRemoteTypingStart: (conversationId: string, userId: string, currentUserId: string | undefined) => void;
+  applyRemoteTypingStop: (conversationId: string, userId: string) => void;
   handleLogout: () => void;
   selectConversation: (conversationId: string) => Promise<void>;
   refreshConversations: () => Promise<Conversation[]>;

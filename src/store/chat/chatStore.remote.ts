@@ -10,9 +10,16 @@ import { fetchMediaBlob } from '../../utils/media.utils';
 import { ApiError } from '../../lib/api-error';
 import { isGlobalConversation, normalizeMessage } from '../../utils/chat.utils';
 import { WidgetPanelType, type Message, type MessageReaction, type MessageType } from '../../types/chat';
+import {
+  chatSocketClientEvents,
+  chatSocketLegacyClientEvents
+} from '../../constants/chat-realtime.constants';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../../constants/session.constants';
-import { CLIENT_GOING_OFFLINE_EVENT } from '../../features/chat/chat.constants';
-import { chatEmitWithAck, getChatSocket } from '../../utils/chat-socket-bridge';
+import {
+  CLIENT_GOING_OFFLINE_EVENT,
+  SOCKET_SEND_MESSAGE_ACK_TIMEOUT_MS
+} from '../../features/chat/chat.constants';
+import { chatEmitWithAck, getChatSocket, unwrapSocketAck } from '../../utils/chat-socket-bridge';
 import { getResolvedApiKey } from '../../lib/api-credentials';
 import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
@@ -24,8 +31,6 @@ type SetChat = {
     replace?: false | undefined
   ): void;
 };
-
-type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
 function sortMessagesOldestToNewest(messages: Message[]): Message[] {
   return [...messages].sort((a, b) => {
@@ -60,6 +65,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       }
       const previousConversationId = get().selectedConversationId;
       get().setError('');
+      get().clearRemoteTypingPeers();
       get().setSelectedConversationId(conversationId);
       if (conversationId !== previousConversationId) {
         get().setMessages([]);
@@ -108,6 +114,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         loadedConversations[0]?.id;
 
       if (initialConversationId) {
+        get().clearRemoteTypingPeers();
         get().setSelectedConversationId(initialConversationId);
         get().setUnreadByConversation((previous) => {
           if (!previous[initialConversationId]) {
@@ -312,34 +319,86 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       if (!selectedConversationId || !text.trim()) {
         return;
       }
+      const socket = getChatSocket();
+      if (socket?.connected) {
+        socket.emit(
+          chatSocketClientEvents.typingStop,
+          { conversationId: selectedConversationId },
+          () => undefined
+        );
+      }
       const trimmed = text.trim();
       const sender = useAuthStore.getState().user;
-      try {
-        const message = await chatEmitWithAck<Message>('send_message', {
-          conversationId: selectedConversationId,
-          type: 'TEXT' as MessageType,
-          content: trimmed
-        });
+      if (!sender?.id?.trim()) {
+        get().setError('Not signed in');
+        return;
+      }
+
+      const optimisticId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? `local:${crypto.randomUUID()}`
+          : `local:${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const optimistic: Message = {
+        id: optimisticId,
+        conversationId: selectedConversationId,
+        senderId: sender.id,
+        content: trimmed,
+        messageType: 'TEXT',
+        replyToMessageId: null,
+        createdAt: new Date().toISOString(),
+        attachments: [],
+        reactions: [],
+        deletedAt: null
+      };
+      get().upsertMessage(normalizeMessage(optimistic));
+      get().setText('');
+
+      const commitServerMessage = (message: Message): void => {
+        get().setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         get().upsertMessage(normalizeMessage(message));
         get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
-        get().setText('');
-      } catch (err) {
-        if (sender && getResolvedApiKey()) {
-          try {
-            const message = await chatApi.postRestMessage(selectedConversationId, {
-              type: 'TEXT',
-              content: trimmed,
-              senderId: sender.id
-            });
-            get().upsertMessage(normalizeMessage(message));
-            get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
-            get().setText('');
-            return;
-          } catch (restErr) {
+      };
+      const rollbackOptimistic = (): void => {
+        get().setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      };
+
+      const token = useAuthStore.getState().token?.trim();
+      const apiKey = getResolvedApiKey();
+      const canSendViaRest = Boolean(token || apiKey);
+
+      if (canSendViaRest) {
+        try {
+          const message = await chatApi.postRestMessage(selectedConversationId, {
+            type: 'TEXT',
+            content: trimmed,
+            senderId: sender.id
+          });
+          commitServerMessage(message);
+          return;
+        } catch (restErr) {
+          const fatal =
+            restErr instanceof ApiError && [400, 401, 403, 422].includes(restErr.status);
+          if (fatal) {
+            rollbackOptimistic();
             get().setError(restErr instanceof Error ? restErr.message : 'Failed to send message');
             return;
           }
         }
+      }
+
+      try {
+        const message = await chatEmitWithAck<Message>(
+          chatSocketClientEvents.sendMessage,
+          {
+            conversationId: selectedConversationId,
+            type: 'TEXT' as MessageType,
+            content: trimmed
+          },
+          { timeoutMs: SOCKET_SEND_MESSAGE_ACK_TIMEOUT_MS }
+        );
+        commitServerMessage(message);
+      } catch (err) {
+        rollbackOptimistic();
         get().setError(err instanceof Error ? err.message : 'Failed to send message');
       }
     },
@@ -353,16 +412,12 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       try {
         const uploaded = await uploadFileRequest(file);
         const user = useAuthStore.getState().user;
-        try {
-          const message = await chatEmitWithAck<Message>('send_message', {
-            conversationId: selectedConversationId,
-            type,
-            content: uploaded.url
-          });
-          get().upsertMessage(normalizeMessage(message));
-          get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
-        } catch (socketErr) {
-          if (user && getResolvedApiKey()) {
+        if (!user?.id) {
+          throw new Error('Not signed in');
+        }
+        const canSendViaRest = Boolean(token?.trim() || getResolvedApiKey());
+        if (canSendViaRest) {
+          try {
             const message = await chatApi.postRestMessage(selectedConversationId, {
               type,
               content: uploaded.url,
@@ -370,10 +425,26 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
             });
             get().upsertMessage(normalizeMessage(message));
             get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
-          } else {
-            throw socketErr;
+            return;
+          } catch (restErr) {
+            const fatal =
+              restErr instanceof ApiError && [400, 401, 403, 422].includes(restErr.status);
+            if (fatal) {
+              throw restErr;
+            }
           }
         }
+        const message = await chatEmitWithAck<Message>(
+          chatSocketClientEvents.sendMessage,
+          {
+            conversationId: selectedConversationId,
+            type,
+            content: uploaded.url
+          },
+          { timeoutMs: SOCKET_SEND_MESSAGE_ACK_TIMEOUT_MS }
+        );
+        get().upsertMessage(normalizeMessage(message));
+        get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Upload failed');
       }
@@ -458,22 +529,36 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         }
 
         socket.emit(
-          'react_message',
+          chatSocketClientEvents.reactMessage,
           {
             messageId,
             conversationId,
             reactionType: emoji
           },
-          (response?: SocketAck<unknown>) => {
+          (response: unknown) => {
             if (response === undefined) {
               return;
             }
-            if (!response.ok) {
+            let data: unknown;
+            try {
+              data = unwrapSocketAck<unknown>(response);
+            } catch (err) {
               revertOptimistic();
-              get().setError(response.error ?? 'Failed to react');
+              get().setError(err instanceof Error ? err.message : 'Failed to react');
               return;
             }
-            const data = response.data;
+            if (
+              data &&
+              typeof data === 'object' &&
+              'messageId' in data &&
+              ('reactionType' in data || 'emoji' in data)
+            ) {
+              get().applyReactionFromSocket({
+                ...(data as MessageReaction & { conversationId?: string; reactionType?: string }),
+                conversationId
+              });
+              return;
+            }
             if (
               data &&
               typeof data === 'object' &&
@@ -491,8 +576,15 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     },
 
     handleDelete: async (messageId) => {
+      const conversationId = get().selectedConversationId;
+      if (!conversationId?.trim()) {
+        return;
+      }
       try {
-        await chatEmitWithAck('delete_message', { messageId });
+        await chatEmitWithAck<unknown>(chatSocketLegacyClientEvents.deleteMessage, {
+          conversationId,
+          messageId
+        });
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to delete message');
       }
@@ -504,7 +596,7 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         return;
       }
       try {
-        await chatEmitWithAck('message_read', { conversationId, messageId });
+        await chatEmitWithAck(chatSocketClientEvents.messageRead, { conversationId, messageId });
       } catch (err) {
         get().setError(err instanceof Error ? err.message : 'Failed to mark as read');
       }

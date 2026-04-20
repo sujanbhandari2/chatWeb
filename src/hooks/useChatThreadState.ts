@@ -28,7 +28,8 @@ export function useChatThreadState() {
     chatHeaderMenuRef,
     startRecording,
     finishRecording,
-    cancelRecording
+    cancelRecording,
+    notifyComposerTyping
   } = useChatRuntimeContext();
 
   return {
@@ -46,5 +47,6 @@ export function useChatThreadState() {
     startRecording,
     finishRecording,
     cancelRecording,
+    notifyComposerTyping,
   };
 }

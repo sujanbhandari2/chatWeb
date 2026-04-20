@@ -1,38 +1,41 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
-import { createChatSocket, type ChatSocketAuth } from '../lib/chat-socket';
+import { chatRealtimeEvents } from '../constants/chat-realtime.constants';
+import { createChatSocket } from '../lib/chat-socket';
 import { conversationKeys } from '../services/conversations.service';
 import type { Message } from '../types/chat';
 
-/** Socket.IO for chat; disconnects when auth context changes. */
-export function useChatSocket(auth: ChatSocketAuth | null): Socket | null {
+/** Socket.IO for chat; connects with API key only; reconnects when the key changes. */
+export function useChatSocket(apiKey: string): Socket | null {
   const qc = useQueryClient();
+  const qcRef = useRef(qc);
+  qcRef.current = qc;
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    if (!auth?.apiKey?.trim() || !auth.companyId?.trim() || !auth.userId?.trim()) {
+    if (!apiKey?.trim()) {
       setSocket(null);
       return undefined;
     }
 
-    const s = createChatSocket(auth);
+    const s = createChatSocket(apiKey);
 
     const onMessage = (message: Message): void => {
-      void qc.invalidateQueries({ queryKey: conversationKeys.messages(message.conversationId) });
-      void qc.invalidateQueries({ queryKey: conversationKeys.list() });
+      const client = qcRef.current;
+      void client.invalidateQueries({ queryKey: conversationKeys.messages(message.conversationId) });
+      void client.invalidateQueries({ queryKey: conversationKeys.list() });
     };
-    s.on('message', onMessage);
+    s.on(chatRealtimeEvents.message, onMessage);
 
     setSocket(s);
 
     return () => {
-      s.off('message', onMessage);
-      s.removeAllListeners();
+      s.off(chatRealtimeEvents.message, onMessage);
       s.disconnect();
       setSocket(null);
     };
-  }, [auth?.token, auth?.apiKey, auth?.companyId, auth?.userId, qc]);
+  }, [apiKey]);
 
   return socket;
 }

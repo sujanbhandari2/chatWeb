@@ -17,7 +17,6 @@ export const selectRuntimeSubscriptionSlice = (s: ChatStore) => ({
   editGroupSaving: s.editGroupSaving,
   chatHeaderMenuOpen: s.chatHeaderMenuOpen,
   widgetInboxMenuOpen: s.widgetInboxMenuOpen,
-  conversations: s.conversations,
 });
 
 /** Main thread stage: messages, composer, header menus, handlers. */
@@ -25,6 +24,7 @@ export const selectThreadView = (s: ChatStore) => ({
   selectedConversationId: s.selectedConversationId,
   widgetRailPane: s.widgetRailPane,
   messages: s.messages,
+  remoteTypingUserIds: s.remoteTypingUserIds,
   text: s.text,
   setText: s.setText,
   error: s.error,

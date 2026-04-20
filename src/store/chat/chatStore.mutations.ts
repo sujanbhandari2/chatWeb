@@ -288,6 +288,32 @@ export function buildChatMutations(set: SetChat, get: () => ChatStore): Partial<
       );
     },
 
+    clearRemoteTypingPeers: () => set({ remoteTypingUserIds: [] }),
+
+    applyRemoteTypingStart: (conversationId, userId, currentUserId) => {
+      if (!userId || userId === currentUserId) {
+        return;
+      }
+      if (conversationId !== get().selectedConversationId) {
+        return;
+      }
+      set((s) => {
+        if (s.remoteTypingUserIds.includes(userId)) {
+          return s;
+        }
+        return { remoteTypingUserIds: [...s.remoteTypingUserIds, userId] };
+      });
+    },
+
+    applyRemoteTypingStop: (conversationId, userId) => {
+      if (conversationId !== get().selectedConversationId) {
+        return;
+      }
+      set((s) => ({
+        remoteTypingUserIds: s.remoteTypingUserIds.filter((id) => id !== userId)
+      }));
+    },
+
     applyReadReceipt: (receipt) => {
       get().setMessages((previous) =>
         previous.map((message) => {

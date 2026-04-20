@@ -107,6 +107,22 @@ export function pickUserId(payload: unknown): string | undefined {
   return typeof id === 'string' ? id : undefined;
 }
 
+/** `user_typing` / `user_stopped_typing` payloads: `{ conversationId, userId }`. */
+export function pickTypingConversationPayload(
+  payload: unknown
+): { conversationId: string; userId: string } | undefined {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+  const record = payload as Record<string, unknown>;
+  const conversationId = record.conversationId ?? record.conversation_id;
+  const userId = pickUserId(record);
+  if (typeof conversationId !== 'string' || !conversationId.trim() || !userId) {
+    return undefined;
+  }
+  return { conversationId: conversationId.trim(), userId };
+}
+
 export function pickPresence(payload: unknown): { userId: string; isOnline: boolean } | undefined {
   if (!payload || typeof payload !== 'object') {
     return undefined;

@@ -11,4 +11,6 @@ export type ChatRuntimeValue = {
   startRecording: () => Promise<void>;
   finishRecording: () => void;
   cancelRecording: () => void;
+  /** Debounced `typing_start` / `typing_stop` for the active thread. */
+  notifyComposerTyping: () => void;
 };

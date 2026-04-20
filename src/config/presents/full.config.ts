@@ -46,7 +46,8 @@ export const exampleFullConfig: WidgetInitConfig = mergeConfig({
       }
     },
     interactions: {
-      animationDuration: 400
+      animationDuration: 400,
+      defaultOpen: true
     },
     uiElements: {
       panelTitle: 'Chat with us',

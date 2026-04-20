@@ -941,6 +941,13 @@ button {
   line-height: 1.35;
 }
 
+.chat-header-typing {
+  margin: 0.35rem 0 0;
+  color: #475569;
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
 .chat-header-menu-wrap {
   position: relative;
   flex-shrink: 0;

@@ -25,7 +25,7 @@ function getApiConfig(): { origin: string; apiBase: string } {
   const raw = (
     runtimeApiUrl ??
     import.meta.env.VITE_API_URL ??
-    'http://localhost:4000/api'
+    'http://localhost:4040/api'
   ).replace(/\/$/, '');
   if (raw.endsWith('/api')) {
     return { origin: raw.replace(/\/api$/, ''), apiBase: raw };
@@ -42,5 +42,13 @@ export function getApiBaseUrl(): string {
 }
 
 export function getResolvedSocketUrl(): string {
-  return runtimeSocketUrl ?? import.meta.env.VITE_SOCKET_URL ?? 'http://localhost:4000';
+  if (runtimeSocketUrl) {
+    return runtimeSocketUrl;
+  }
+  const fromEnv = import.meta.env.VITE_SOCKET_URL;
+  if (typeof fromEnv === 'string' && fromEnv.trim()) {
+    return fromEnv.replace(/\/$/, '');
+  }
+  /** Same HTTP origin as REST so a correct `VITE_API_URL` alone cannot leave sockets on the wrong port/host. */
+  return getServerOrigin();
 }

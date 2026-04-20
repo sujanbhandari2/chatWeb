@@ -23,3 +23,6 @@ export const translateLangLabel = (code: string): string =>
 export const CLIENT_GOING_OFFLINE_EVENT = 'going_offline';
 
 export const SOCKET_ACK_TIMEOUT_MS = 8000;
+
+/** `send_message` should fall back to REST quickly if the ack is slow or missing. */
+export const SOCKET_SEND_MESSAGE_ACK_TIMEOUT_MS = 2800;

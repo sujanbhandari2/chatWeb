@@ -55,6 +55,8 @@ export function ChatThreadView(): JSX.Element {
     handleTranslateForMessage,
     isRecording,
     recordingDurationMs,
+    remoteTypingUserIds,
+    notifyComposerTyping,
     selectedConversation,
     selectedDirectPeerId,
     getConversationTitle,
@@ -120,6 +122,11 @@ export function ChatThreadView(): JSX.Element {
               <div className="chat-header-titles">
                 <h3>{getConversationTitle(selectedConversation)}</h3>
                 <p>{getConversationSubtitle(selectedConversation)}</p>
+                {remoteTypingUserIds.length > 0 ? (
+                  <p className="chat-header-typing" aria-live="polite">
+                    {remoteTypingUserIds.map((id) => getSenderLabel(id)).join(', ')} typing…
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="chat-header-menu-wrap" ref={chatHeaderMenuRef as LegacyRef<HTMLDivElement>}>
@@ -518,7 +525,10 @@ export function ChatThreadView(): JSX.Element {
               <input
                 className="composer-input"
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={(event) => {
+                  setText(event.target.value);
+                  notifyComposerTyping();
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();

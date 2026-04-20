@@ -2,24 +2,16 @@ import { io, type Socket } from 'socket.io-client';
 import { getResolvedSocketUrl } from '../utils/runtime-endpoints.utils';
 import { formatWireXApiKeyValue } from '../utils/chat-api-key.utils';
 
-export type ChatSocketAuth = {
-  /** Client JWT when the server returns one; omit empty so `Authorization` is not sent as `Bearer `. */
-  token?: string;
-  apiKey: string;
-  companyId: string;
-  userId: string;
-};
-
-/** Handshake: `X-Api-Key` + optional JWT + `{ companyId, userId/chatUserId }` (headers + `auth` for browser WS). */
-export function createChatSocket({ token, apiKey, companyId, userId }: ChatSocketAuth): Socket {
+/** Handshake: `X-Api-Key` and the same value in `auth` (for WS upgrades where browsers omit `extraHeaders`). No JWT. */
+export function createChatSocket(apiKey: string): Socket {
   const wireKey = formatWireXApiKeyValue(apiKey) ?? apiKey;
-  const jwt = token?.trim();
   const pollingHeaders: Record<string, string> = { 'X-Api-Key': wireKey };
-  if (jwt) {
-    pollingHeaders.Authorization = `Bearer ${jwt}`;
-  }
   return io(getResolvedSocketUrl(), {
     path: '/socket.io/',
+    /** In dev, avoid infinite reconnect spam when nothing speaks Engine.IO on `VITE_SOCKET_URL` / API origin. */
+    ...(import.meta.env.DEV
+      ? { reconnectionAttempts: 12, reconnectionDelay: 1500, reconnectionDelayMax: 8000 }
+      : {}),
     /**
      * Postman / Node can attach `extraHeaders` on the WebSocket upgrade; browsers often cannot.
      * Send the same material in `handshake.auth` so the server can read `X-Api-Key` equivalents
@@ -31,13 +23,9 @@ export function createChatSocket({ token, apiKey, companyId, userId }: ChatSocke
       }
     },
     auth: {
-      ...(jwt ? { token: jwt } : {}),
       /** Same value as `X-Api-Key` header — many gateways read this on WS-only handshakes. */
       apiKey: wireKey,
-      xApiKey: wireKey,
-      companyId,
-      userId,
-      chatUserId: userId
+      xApiKey: wireKey
     }
   });
 }

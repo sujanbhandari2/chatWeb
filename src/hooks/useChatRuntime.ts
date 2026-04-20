@@ -1,11 +1,16 @@
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef } from 'react';
 import type { DeliveredReceipt, Message, ReadReceipt } from '../types/chat';
 import { WidgetPanelType } from '../types/chat';
 import { useChatSocket } from './useChatSocket';
+import {
+  chatRealtimeEvents,
+  chatRealtimeLegacyEvents,
+  chatSocketClientEvents
+} from '../constants/chat-realtime.constants';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../constants/session.constants';
 import { CLIENT_GOING_OFFLINE_EVENT } from '../features/chat/chat.constants';
 import { setChatSocketInstance } from '../utils/chat-socket-bridge';
-import { pickPresence, pickUserId } from '../utils/chat.utils';
+import { pickTypingConversationPayload, pickUserId } from '../utils/chat.utils';
 import { getResolvedApiKey, resolveEffectiveXCompanyId } from '../lib/api-credentials';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
@@ -14,7 +19,7 @@ import { useChatStore } from '../store/useChatStore';
 import type { WidgetInitConfig } from '../schemas/widget.schemas';
 import type { ChatRuntimeValue } from '../types/chat-runtime.types';
 
-type SocketAck<T> = { ok: boolean; data?: T; error?: string };
+type JoinConversationAck = { ok: boolean; error?: string };
 
 /** Socket sync, scroll, menus, recording, and bootstrap for the chat UI. */
 export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue {
@@ -24,23 +29,12 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const clearSession = useAuthStore((s) => s.clearSession);
   const canUseApi = Boolean(token?.trim() || getResolvedApiKey());
   const apiKey = getResolvedApiKey();
-  const socketAuth = useMemo(() => {
-    if (!user?.id?.trim() || !apiKey?.trim()) {
-      return null;
-    }
-    const companyId = resolveEffectiveXCompanyId(undefined)?.trim();
-    if (!companyId) {
-      return null;
-    }
-    const jwt = token?.trim();
-    return {
-      ...(jwt ? { token: jwt } : {}),
-      apiKey: apiKey.trim(),
-      companyId,
-      userId: user.id
-    };
-  }, [user, token, apiKey]);
-  const socket = useChatSocket(socketAuth);
+
+  if (!apiKey) {
+    console.error('No API key found');
+  }
+
+  const socket = useChatSocket(apiKey ?? '');
 
   const messageScrollerRef = useRef<HTMLElement | null>(null);
   const chatHeaderMenuRef = useRef<HTMLDivElement | null>(null);
@@ -49,6 +43,9 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const discardRecordingRef = useRef<boolean>(false);
+  const typingStopTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const typingStartedRef = useRef(false);
+  const previousThreadIdRef = useRef<string | undefined>(undefined);
 
   const newGroupFormId = useId().replace(/:/g, '');
   const editGroupFormId = useId().replace(/:/g, '');
@@ -68,7 +65,6 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     editGroupSaving,
     chatHeaderMenuOpen,
     widgetInboxMenuOpen,
-    conversations,
   } = useChatSelectors(selectRuntimeSubscriptionSlice);
 
   useEffect(() => {
@@ -187,13 +183,6 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       useChatStore.getState().updateTenantUserOnline(userId, isOnline);
     };
 
-    const onPresencePayload = (payload: unknown): void => {
-      const parsed = pickPresence(payload);
-      if (parsed) {
-        updateUserPresence(parsed.userId, parsed.isOnline);
-      }
-    };
-
     const onOnlinePayload = (payload: unknown): void => {
       const id = pickUserId(payload);
       if (id) {
@@ -208,49 +197,28 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       }
     };
 
-    const presenceEvents: Array<[string, (p: unknown) => void]> = [
-      ['presence_update', onPresencePayload],
-      ['user_presence', onPresencePayload],
-      ['presence', onPresencePayload],
-      ['presence_change', onPresencePayload],
-      ['user_online', onOnlinePayload],
-      ['user:online', onOnlinePayload],
-      ['USER_ONLINE', onOnlinePayload],
-      ['user_offline', onOfflinePayload],
-      ['user:offline', onOfflinePayload],
-      ['USER_OFFLINE', onOfflinePayload]
-    ];
-
-    for (const [event, handler] of presenceEvents) {
-      newSocket.on(event, handler);
-    }
-
-    const onPresenceState = (payload: unknown): void => {
-      if (!payload || typeof payload !== 'object') {
+    const onUserTyping = (payload: unknown): void => {
+      const parsed = pickTypingConversationPayload(payload);
+      if (!parsed) {
         return;
       }
-      const record = payload as Record<string, unknown>;
-      const map = record.map as Record<string, boolean> | undefined;
-      if (!map || typeof map !== 'object') {
-        return;
-      }
-      useChatStore.getState().applyTenantPresenceMap(map);
+      useChatStore
+        .getState()
+        .applyRemoteTypingStart(parsed.conversationId, parsed.userId, user?.id);
     };
 
-    const onOnlineUsersList = (payload: unknown): void => {
-      if (!payload || typeof payload !== 'object') {
+    const onUserStoppedTyping = (payload: unknown): void => {
+      const parsed = pickTypingConversationPayload(payload);
+      if (!parsed) {
         return;
       }
-      const record = payload as Record<string, unknown>;
-      const ids = record.userIds ?? record.user_ids ?? record.ids;
-      if (!Array.isArray(ids)) {
-        return;
-      }
-      useChatStore.getState().setAllTenantOnlineFromIds(ids);
+      useChatStore.getState().applyRemoteTypingStop(parsed.conversationId, parsed.userId);
     };
 
-    newSocket.on('presence_state', onPresenceState);
-    newSocket.on('online_users', onOnlineUsersList);
+    newSocket.on(chatRealtimeEvents.userOnline, onOnlinePayload);
+    newSocket.on(chatRealtimeEvents.userOffline, onOfflinePayload);
+    newSocket.on(chatRealtimeEvents.userTyping, onUserTyping);
+    newSocket.on(chatRealtimeEvents.userStoppedTyping, onUserStoppedTyping);
 
     const onSocketConnect = (): void => {
       useChatStore.getState().setSocketConnected(true);
@@ -264,14 +232,18 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     newSocket.on('disconnect', onSocketDisconnect);
 
     const emitDelivery = (conversationId: string, messageId: string): void => {
-      newSocket.emit('message_delivered', { conversationId, messageId }, () => undefined);
+      newSocket.emit(
+        chatSocketClientEvents.messageDelivered,
+        { conversationId, messageId },
+        () => undefined
+      );
     };
 
     const emitRead = (conversationId: string, messageId: string): void => {
-      newSocket.emit('message_read', { conversationId, messageId }, () => undefined);
+      newSocket.emit(chatSocketClientEvents.messageRead, { conversationId, messageId }, () => undefined);
     };
 
-    newSocket.on('message', (message: Message) => {
+    newSocket.on(chatRealtimeEvents.message, (message: Message) => {
       const store = useChatStore.getState();
       const authUser = useAuthStore.getState().user;
       store.bumpConversationUpdatedAt(message.conversationId, message.createdAt);
@@ -298,23 +270,22 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     });
 
     const applyReactionFromSocket = useChatStore.getState().applyReactionFromSocket;
-    newSocket.on('message_reacted', applyReactionFromSocket);
-    newSocket.on('reaction_added', applyReactionFromSocket);
+    newSocket.on(chatRealtimeEvents.reactionAdded, applyReactionFromSocket);
 
     const onMessageDeleted = (payload: { messageId: string; conversationId: string; deletedAt: string }): void => {
       useChatStore.getState().applyMessageDeleted(payload);
     };
-    newSocket.on('message_deleted', onMessageDeleted);
+    newSocket.on(chatRealtimeLegacyEvents.messageDeleted, onMessageDeleted);
 
     const onDelivered = (receipt: DeliveredReceipt & { conversationId?: string }): void => {
       useChatStore.getState().applyDeliveredReceipt(receipt);
     };
-    newSocket.on('message_delivered', onDelivered);
+    newSocket.on(chatRealtimeEvents.messageDelivered, onDelivered);
 
     const onRead = (receipt: ReadReceipt & { conversationId?: string }): void => {
       useChatStore.getState().applyReadReceipt(receipt);
     };
-    newSocket.on('message_read', onRead);
+    newSocket.on(chatRealtimeEvents.messageRead, onRead);
 
     newSocket.on('connect_error', (connectionError) => {
       useChatStore.getState().setError(`Realtime connection failed: ${connectionError.message}`);
@@ -343,19 +314,17 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     return () => {
       window.removeEventListener('pagehide', onPageLeave);
       window.removeEventListener('beforeunload', onPageLeave);
-      for (const [event, handler] of presenceEvents) {
-        newSocket.off(event, handler);
-      }
-      newSocket.off('presence_state', onPresenceState);
-      newSocket.off('online_users', onOnlineUsersList);
+      newSocket.off(chatRealtimeEvents.userOnline, onOnlinePayload);
+      newSocket.off(chatRealtimeEvents.userOffline, onOfflinePayload);
+      newSocket.off(chatRealtimeEvents.userTyping, onUserTyping);
+      newSocket.off(chatRealtimeEvents.userStoppedTyping, onUserStoppedTyping);
       newSocket.off('connect', onSocketConnect);
       newSocket.off('disconnect', onSocketDisconnect);
-      newSocket.off('message');
-      newSocket.off('message_reacted', applyReactionFromSocket);
-      newSocket.off('reaction_added', applyReactionFromSocket);
-      newSocket.off('message_deleted', onMessageDeleted);
-      newSocket.off('message_delivered', onDelivered);
-      newSocket.off('message_read', onRead);
+      newSocket.off(chatRealtimeEvents.message);
+      newSocket.off(chatRealtimeEvents.reactionAdded, applyReactionFromSocket);
+      newSocket.off(chatRealtimeLegacyEvents.messageDeleted, onMessageDeleted);
+      newSocket.off(chatRealtimeEvents.messageDelivered, onDelivered);
+      newSocket.off(chatRealtimeEvents.messageRead, onRead);
       newSocket.off('connect_error');
       useChatStore.getState().setSocketConnected(false);
     };
@@ -375,48 +344,101 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
       const readReceipts = message.readReceipts ?? [];
 
       if (!deliveredReceipts.some((item) => item.userId === user.id)) {
-        socket.emit('message_delivered', { conversationId: selectedConversationId, messageId: message.id }, () =>
-          undefined
+        socket.emit(
+          chatSocketClientEvents.messageDelivered,
+          { conversationId: selectedConversationId, messageId: message.id },
+          () => undefined
         );
       }
 
       if (!readReceipts.some((item) => item.userId === user.id)) {
-        socket.emit('message_read', { conversationId: selectedConversationId, messageId: message.id }, () =>
-          undefined
+        socket.emit(
+          chatSocketClientEvents.messageRead,
+          { conversationId: selectedConversationId, messageId: message.id },
+          () => undefined
         );
       }
     });
   }, [socket, selectedConversationId, messages, user]);
 
   useEffect(() => {
-    if (!socket || conversations.length === 0) {
-      return;
+    if (!socket || !user?.id || !selectedConversationId?.trim()) {
+      return undefined;
     }
 
-    const joinAllConversations = (): void => {
-      conversations.forEach((conversation) => {
-        socket.emit(
-          'join_conversation',
-          { conversationId: conversation.id },
-          (response: SocketAck<{ conversationId: string }>) => {
-            if (!response.ok) {
-              useChatStore.getState().setError(response.error ?? 'Failed to join conversation');
-            }
+    const conversationId = selectedConversationId.trim();
+
+    const join = (): void => {
+      socket.emit(
+        chatSocketClientEvents.joinConversation,
+        { conversationId },
+        (response: unknown) => {
+          if (
+            response &&
+            typeof response === 'object' &&
+            'ok' in response &&
+            (response as JoinConversationAck).ok === false
+          ) {
+            useChatStore
+              .getState()
+              .setError((response as JoinConversationAck).error ?? 'Failed to join conversation');
           }
-        );
-      });
+        }
+      );
     };
 
+    socket.on('connect', join);
     if (socket.connected) {
-      joinAllConversations();
-    } else {
-      socket.once('connect', joinAllConversations);
+      join();
     }
 
     return () => {
-      socket.off('connect', joinAllConversations);
+      socket.off('connect', join);
+      socket.emit(
+        chatSocketClientEvents.leaveConversation,
+        { conversationId },
+        () => undefined
+      );
     };
-  }, [socket, conversations]);
+  }, [socket, selectedConversationId, user?.id]);
+
+  useEffect(() => {
+    const prev = previousThreadIdRef.current;
+    previousThreadIdRef.current = selectedConversationId || undefined;
+    typingStartedRef.current = false;
+    if (typingStopTimerRef.current) {
+      window.clearTimeout(typingStopTimerRef.current);
+      typingStopTimerRef.current = null;
+    }
+    if (prev?.trim() && socket?.connected) {
+      socket.emit(
+        chatSocketClientEvents.typingStop,
+        { conversationId: prev.trim() },
+        () => undefined
+      );
+    }
+  }, [selectedConversationId, socket]);
+
+  const notifyComposerTyping = useCallback((): void => {
+    if (!socket?.connected || !selectedConversationId?.trim()) {
+      return;
+    }
+    const conversationId = selectedConversationId.trim();
+    if (!typingStartedRef.current) {
+      typingStartedRef.current = true;
+      socket.emit(chatSocketClientEvents.typingStart, { conversationId }, () => undefined);
+    }
+    if (typingStopTimerRef.current) {
+      window.clearTimeout(typingStopTimerRef.current);
+    }
+    typingStopTimerRef.current = window.setTimeout(() => {
+      typingStopTimerRef.current = null;
+      if (socket.connected && typingStartedRef.current) {
+        typingStartedRef.current = false;
+        socket.emit(chatSocketClientEvents.typingStop, { conversationId }, () => undefined);
+      }
+    }, 2000);
+  }, [socket, selectedConversationId]);
 
   useEffect(() => {
     if (!canUseApi || !user) {
@@ -535,6 +557,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     editGroupFormId,
     startRecording,
     finishRecording,
-    cancelRecording
+    cancelRecording,
+    notifyComposerTyping
   };
 }

@@ -4,16 +4,19 @@ export const devSandboxPartial: DeepPartialWidgetConfig = {
     features: {
       imageUpload: true,
       audioAttachmentUpload: true,
-      voiceRecording: false,
-      createGroup: false,
-      editGroup: false,
+      voiceRecording: true,
+      createGroup: true,
+      editGroup: true,
       chatListSearch: true,
-      translateMessages: false,
+      translateMessages: true,
       voiceTranscription: true,
-      messageReactions: false,
+      messageReactions: true,
       deleteConversation: true,
     },
     uiElements: {
       panelTitle: 'VSuite Chat',
     },
+    interactions: {
+      defaultOpen: true
+    }
   };
