@@ -1,6 +1,6 @@
 import type { ProvisionUserInput } from '../schemas/auth.schemas';
 import type { CreateAccountResponse } from '../types/chat';
-import { createClientUser } from './users.api';
+import { createTenantUser } from './users.api';
 
 function withCompanyFallback(raw: Record<string, unknown>, companyId: string): Record<string, unknown> {
   const cid = pickCompanyId(raw);
@@ -17,7 +17,7 @@ function pickRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function pickUserRecordFromClientCreateResponse(created: unknown): Record<string, unknown> {
+function pickUserRecordFromTenantCreateResponse(created: unknown): Record<string, unknown> {
   const root = pickRecord(created) ?? {};
   const directUser = pickRecord(root.user);
   if (directUser) {
@@ -41,7 +41,8 @@ function pickCompanyId(raw: Record<string, unknown>): string {
 }
 
 function mapToAuthUser(raw: Record<string, unknown>): CreateAccountResponse['user'] {
-  const id = String(raw.id ?? '');
+  const idRaw = raw.id ?? raw.user_id ?? raw.userId;
+  const id = idRaw != null && idRaw !== '' ? String(idRaw) : '';
   const email = String(raw.email ?? '');
   return {
     id,
@@ -53,18 +54,18 @@ function mapToAuthUser(raw: Record<string, unknown>): CreateAccountResponse['use
 }
 
 /**
- * Creates the chat user via `POST /api/v1/chat/users` (embed: `X-Api-Key` + `X-Company-Id`).
- * Response may omit JWT; chat still works with API key + resolved user id.
+ * Creates the chat user via `POST /api/v1/chat/users` (`CreateUserDto`: providerId, providerUserId, email, optional name).
+ * Response may omit JWT; chat works with API key + user id.
  */
 export const provisionUser = async (body: ProvisionUserInput): Promise<CreateAccountResponse> => {
-  const companyId = body.companyId.trim();
-  const created = await createClientUser(
-    {
-      email: body.email.trim(),
-      name: body.name.trim()
-    },
-    companyId
-  );
+  const email = body.email.trim();
+  const nameTrim = body.name?.trim();
+  const created = await createTenantUser({
+    providerId: body.providerId.trim(),
+    providerUserId: body.providerUserId.trim(),
+    email,
+    ...(nameTrim ? { name: nameTrim } : {})
+  });
   const root = pickRecord(created) ?? {};
   const token =
     typeof root.token === 'string'
@@ -74,7 +75,7 @@ export const provisionUser = async (body: ProvisionUserInput): Promise<CreateAcc
         : typeof root.accessToken === 'string'
           ? root.accessToken
           : '';
-  const userSource = withCompanyFallback(pickUserRecordFromClientCreateResponse(created), companyId);
+  const userSource = withCompanyFallback(pickUserRecordFromTenantCreateResponse(created), '');
   const user = mapToAuthUser(userSource);
   if (!user.id?.trim()) {
     throw new Error('User id missing in API response');

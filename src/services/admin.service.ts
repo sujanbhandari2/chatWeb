@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  createAdminClient,
-  createAdminClientApiKey,
-  deleteAdminClient,
+  createAdminTenant,
+  createAdminTenantApiKey,
+  deleteAdminTenant,
   getAdminProfile,
-  listAdminClientApiKeys,
-  listAdminClients,
+  listAdminTenantApiKeys,
+  listAdminTenants,
   loginAdmin,
-  revokeAdminClientApiKey,
-  updateAdminClient
+  revokeAdminTenantApiKey,
+  updateAdminTenant
 } from '../api/admin.api';
 import { toast } from '../common/ui/Toaster';
 import { ApiError } from '../lib/api-error';
@@ -18,7 +18,7 @@ import { pickBearerToken } from '../types/admin.types';
 export const adminKeys = {
   all: ['admin'] as const,
   profile: () => [...adminKeys.all, 'profile'] as const,
-  clients: () => [...adminKeys.all, 'clients'] as const,
+  tenants: () => [...adminKeys.all, 'tenants'] as const,
   userKeys: (userId: string) => [...adminKeys.all, 'api-keys', userId] as const
 };
 
@@ -36,11 +36,11 @@ export const useAdminProfileQuery = () => {
   });
 };
 
-export const useAdminClientsQuery = () => {
+export const useAdminTenantsQuery = () => {
   const token = useAdminAuthStore((s) => s.token);
   return useQuery({
-    queryKey: adminKeys.clients(),
-    queryFn: () => listAdminClients(),
+    queryKey: adminKeys.tenants(),
+    queryFn: () => listAdminTenants(),
     enabled: Boolean(token?.trim())
   });
 };
@@ -59,54 +59,54 @@ export const useAdminLoginMutation = () => {
   });
 };
 
-export const useCreateAdminClientMutation = () => {
+export const useCreateAdminTenantMutation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: createAdminClient,
-    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.clients() }),
+    mutationFn: createAdminTenant,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.tenants() }),
     onError: toastApiError
   });
 };
 
-export const useUpdateAdminClientMutation = () =>
+export const useUpdateAdminTenantMutation = () =>
   useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof updateAdminClient>[1] }) =>
-      updateAdminClient(id, body),
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof updateAdminTenant>[1] }) =>
+      updateAdminTenant(id, body),
     onError: toastApiError
   });
 
-export const useDeleteAdminClientMutation = () => {
+export const useDeleteAdminTenantMutation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: deleteAdminClient,
-    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.clients() }),
+    mutationFn: deleteAdminTenant,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.tenants() }),
     onError: toastApiError
   });
 };
 
-export const useAdminClientApiKeysQuery = (userId: string) => {
+export const useAdminTenantApiKeysQuery = (userId: string) => {
   const token = useAdminAuthStore((s) => s.token);
   return useQuery({
     queryKey: adminKeys.userKeys(userId),
-    queryFn: () => listAdminClientApiKeys(userId),
+    queryFn: () => listAdminTenantApiKeys(userId),
     enabled: Boolean(token?.trim() && userId)
   });
 };
 
-export const useCreateAdminClientApiKeyMutation = (userId: string) => {
+export const useCreateAdminTenantApiKeyMutation = (userId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Parameters<typeof createAdminClientApiKey>[1]) =>
-      createAdminClientApiKey(userId, body),
+    mutationFn: (body: Parameters<typeof createAdminTenantApiKey>[1]) =>
+      createAdminTenantApiKey(userId, body),
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.userKeys(userId) }),
     onError: toastApiError
   });
 };
 
-export const useRevokeAdminClientApiKeyMutation = (userId: string) => {
+export const useRevokeAdminTenantApiKeyMutation = (userId: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (keyId: string) => revokeAdminClientApiKey(userId, keyId),
+    mutationFn: (keyId: string) => revokeAdminTenantApiKey(userId, keyId),
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.userKeys(userId) }),
     onError: toastApiError
   });

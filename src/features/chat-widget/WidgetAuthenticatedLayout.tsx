@@ -33,6 +33,6 @@ export function WidgetAuthenticatedLayout({
         </div>
       </WidgetInitConfigProvider>
     </ChatRuntimeProvider>,
-    headerLabel
+    { panelHeaderCenterText: headerLabel }
   );
 }

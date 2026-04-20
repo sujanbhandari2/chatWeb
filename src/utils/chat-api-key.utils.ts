@@ -68,7 +68,7 @@ function pickFirstString(o: Record<string, unknown>, keys: string[]): string | u
 }
 
 /**
- * Parses POST create-client-api-key JSON into the raw `X-Api-Key` credential (typically `id:secret`).
+ * Parses POST create-tenant-api-key JSON into the raw `X-Api-Key` credential (typically `id:secret`).
  */
 export function parseAdminCreateApiKeyHeaderValue(payload: unknown): string | undefined {
   const o = unwrapAdminEntity(payload);

@@ -3,9 +3,9 @@
 import type { WidgetInitConfig } from './schemas/widget.schemas';
 
 interface ImportMetaEnv {
-  /** Optional company id for `widget.html` only (`backend.companyId`). Legacy: `VITE_WIDGET_TENANT_ID`. */
+  /** Optional: folded into widget `backend.companyId` / URL helpers only — not sent as `X-Company-Id`. */
   readonly VITE_WIDGET_COMPANY_ID?: string;
-  /** @deprecated Use `VITE_WIDGET_COMPANY_ID`. */
+  /** @deprecated Alias read by `widget.html` for the same optional `backend` field. */
   readonly VITE_WIDGET_TENANT_ID?: string;
   /**
    * Widget base config: `development` | `staging` | `production`, or demo presets
@@ -20,7 +20,7 @@ declare global {
   interface Window {
     /**
      * Optional embed overrides before the widget bundle loads.
-     * Applied: **layout / interaction**, and **`backend.companyId`** (legacy `tenantId`), **`lockTenant`**, **`hideTenantField`** only.
+     * Applied: **layout / interaction**, and optional **`backend.companyId`** (legacy `tenantId`), **`lockTenant`**, **`hideTenantField`** only.
      * Ignored from here: `backend.apiUrl`, `socketUrl`, timeouts, plus `uiElements`, `colors`, `typography`, `a11y`,
      * `features`, `app`, `zIndex`, `debug` (use `src/config/widget.config.ts`).
      */

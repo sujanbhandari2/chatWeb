@@ -1,6 +1,6 @@
-# Frontend Test Client
+# Vitafy Chat — frontend
 
-Minimal React client for manual verification:
+Minimal React application for manual verification:
 - Register/Login with unique `username` + `password`
 - See currently online users (`isOnline`)
 - Auto-open global conversation for all registered users

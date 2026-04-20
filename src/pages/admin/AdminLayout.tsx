@@ -25,7 +25,7 @@ export function AdminLayout(): JSX.Element {
         <p className="admin-shell__brand">Vitafy Admin</p>
         <p className="admin-shell__tag">Console</p>
         <nav className="admin-shell__nav">
-          <NavLink to={AdminRoutes.CLIENTS}>Clients</NavLink>
+          <NavLink to={AdminRoutes.TENANTS}>Tenants</NavLink>
           <NavLink to={WIDGET_PUBLIC_PATHS.EMBED_DOCS}>Widget embed guide</NavLink>
         </nav>
         <div className="admin-shell__sidebar-footer">

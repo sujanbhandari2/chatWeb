@@ -3,23 +3,35 @@ import { apiService } from '../lib/api-service';
 import { listChatUsers } from './chat.api';
 import type { TenantUser } from '../types/chat';
 
-export type CreateClientUserBody = {
+/** Matches Chat API `CreateUserDto`. */
+export type CreateTenantUserBody = {
+  providerId: string;
+  providerUserId: string;
   email: string;
   name?: string;
 };
 
-/** `POST /api/v1/chat/users` — requires `X-Company-Id` (sent here so it matches the provision form when tenant is editable). */
-export const createClientUser = (body: CreateClientUserBody, companyId: string): Promise<unknown> =>
-  apiService.post<unknown>(API_PATHS.CHAT.USERS, body, {
-    headers: { 'X-Company-Id': companyId.trim() }
-  });
+/** `POST /api/v1/chat/users` — `X-Api-Key` from axios (no separate company header). */
+export const createTenantUser = (body: CreateTenantUserBody): Promise<unknown> => {
+  const payload: Record<string, string> = {
+    providerId: body.providerId.trim(),
+    providerUserId: body.providerUserId.trim(),
+    email: body.email.trim()
+  };
+  const name = body.name?.trim();
+  if (name) {
+    payload.name = name;
+  }
+  return apiService.post<unknown>(API_PATHS.CHAT.USERS, payload);
+};
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
 function mapChatUserToTenantUser(u: Record<string, unknown>): TenantUser {
-  const id = String(u.id ?? '');
+  const idRaw = u.id ?? u.user_id ?? u.userId;
+  const id = idRaw != null && idRaw !== '' ? String(idRaw) : '';
   return {
     id,
     companyId: String(u.companyId ?? u.company_id ?? u.tenantId ?? u.tenant_id ?? ''),

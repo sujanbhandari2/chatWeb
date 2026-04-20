@@ -19,7 +19,7 @@ export const TRANSLATE_TARGET_LANGS: Array<{ code: string; label: string }> = [
 export const translateLangLabel = (code: string): string =>
   TRANSLATE_TARGET_LANGS.find((lang) => lang.code === code)?.label ?? code.toUpperCase();
 
-/** Client → server: notify presence before unload / logout (handle on gateway alongside disconnect). */
+/** Browser → server: notify presence before unload / logout (handle on gateway alongside disconnect). */
 export const CLIENT_GOING_OFFLINE_EVENT = 'going_offline';
 
 export const SOCKET_ACK_TIMEOUT_MS = 8000;

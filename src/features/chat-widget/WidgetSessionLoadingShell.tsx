@@ -3,5 +3,5 @@ import type { WidgetSessionLoadingShellProps } from '../../types/widget-app.type
 
 /** Session restoring UI inside the floating widget. */
 export function WidgetSessionLoadingShell({ config }: WidgetSessionLoadingShellProps): JSX.Element {
-  return wrapWidgetContent(config, <WidgetSessionLoadingContent />);
+  return wrapWidgetContent(config, <WidgetSessionLoadingContent />, { panelInitiallyOpen: true });
 }

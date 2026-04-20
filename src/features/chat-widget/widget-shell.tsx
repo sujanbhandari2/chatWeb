@@ -6,14 +6,26 @@ import type { WidgetUnauthorizedReason } from '../../types/widget-app.types';
 import { WidgetChat } from './ChatWidget';
 import { AuthForm } from '../auth/AuthForm';
 
+export type WrapWidgetContentOptions = {
+  panelHeaderCenterText?: string;
+  /** Open panel on mount (sign-in, loading, missing key — not only the floating launcher). */
+  panelInitiallyOpen?: boolean;
+};
+
 /** Wraps panel body content in the floating widget (launcher + panel). */
 export function wrapWidgetContent(
   config: WidgetInitConfig,
   content: ReactNode,
-  panelHeaderCenterText?: string
+  options?: string | WrapWidgetContentOptions
 ): JSX.Element {
+  const opts: WrapWidgetContentOptions =
+    typeof options === 'string' ? { panelHeaderCenterText: options } : (options ?? {});
   return (
-    <WidgetChat config={config} panelHeaderCenterText={panelHeaderCenterText}>
+    <WidgetChat
+      config={config}
+      panelHeaderCenterText={opts.panelHeaderCenterText}
+      panelInitiallyOpen={opts.panelInitiallyOpen}
+    >
       {content}
     </WidgetChat>
   );
@@ -42,24 +54,16 @@ export type WidgetUnauthorizedContentProps = {
 
 /** No launcher actions — static message inside the widget panel. */
 export function WidgetUnauthorizedContent({
-  reason = 'missingApiKey'
+  reason: _reason = 'missingApiKey'
 }: WidgetUnauthorizedContentProps): JSX.Element {
-  const copy =
-    reason === 'missingCompany' ? (
-      <>
-        The embed is configured with a <strong>fixed company</strong> but no <code>backend.companyId</code> (or env{' '}
-        <code>VITE_WIDGET_COMPANY_ID</code>) was resolved, so <code>X-Company-Id</code> cannot be sent. Set{' '}
-        <code>backend.companyId</code> in <code>window.__HEALTHCHAT_WIDGET_CONFIG__</code>, your build profile, or query
-        params (dev only).
-      </>
-    ) : (
-      <>
-        This chat widget must receive a valid <strong>API credential</strong> (merged <code>id:secret</code> as{' '}
-        <code>X-Api-Key</code>). Set <code>backend.accessKey</code> plus <code>backend.secretKey</code>, or a combined{' '}
-        <code>accessKey</code> string, pass query params (dev only), or use <code>VITE_WIDGET_ACCESS_KEY</code> /{' '}
-        <code>VITE_WIDGET_SECRET_KEY</code> in <code>.env</code> for local widget builds.
-      </>
-    );
+  const copy = (
+    <>
+      This chat widget must receive a valid <strong>API credential</strong> (merged <code>id:secret</code> as{' '}
+      <code>X-Api-Key</code>). Set <code>backend.accessKey</code> plus <code>backend.secretKey</code>, or a combined{' '}
+      <code>accessKey</code> string, pass query params (dev only), or use <code>VITE_WIDGET_ACCESS_KEY</code> /{' '}
+      <code>VITE_WIDGET_SECRET_KEY</code> in <code>.env</code> for local widget builds.
+    </>
+  );
   return (
     <div className="auth-shell auth-shell--widget">
       <div className="auth-card" style={{ borderColor: '#fecdd3', boxShadow: '0 20px 48px rgba(185, 28, 28, 0.12)' }}>
@@ -88,7 +92,7 @@ export function WidgetUnauthenticatedContent({
         <p className="auth-subtitle" style={{ marginBottom: '0.5rem' }}>
           Enter your details once—we call the user API and open your conversations.
         </p>
-        <AuthForm widgetMode={true} widgetConfig={config} widgetMissingTenant={widgetMissingTenant} />
+        <AuthForm widgetMissingTenant={widgetMissingTenant} />
       </div>
     </div>
   );

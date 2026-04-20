@@ -38,7 +38,7 @@ export const chatRealtimeLegacyEvents = {
   messageDeleted: 'message_deleted'
 } as const;
 
-/** Client → server events not in the published contract (may still exist on older gateways). */
+/** Browser → server events not in the published contract (may still exist on older gateways). */
 export const chatSocketLegacyClientEvents = {
   deleteMessage: 'delete_message'
 } as const;

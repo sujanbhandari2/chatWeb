@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef } from 'react';
+import type { ChatSocketHandshakeSession } from '../lib/chat-socket';
 import type { DeliveredReceipt, Message, ReadReceipt } from '../types/chat';
 import { WidgetPanelType } from '../types/chat';
 import { useChatSocket } from './useChatSocket';
@@ -11,7 +12,9 @@ import { SELECTED_CONVERSATION_STORAGE_KEY } from '../constants/session.constant
 import { CLIENT_GOING_OFFLINE_EVENT } from '../features/chat/chat.constants';
 import { setChatSocketInstance } from '../utils/chat-socket-bridge';
 import { pickTypingConversationPayload, pickUserId } from '../utils/chat.utils';
-import { getResolvedApiKey, resolveEffectiveXCompanyId } from '../lib/api-credentials';
+import { ApiError } from '../lib/api-error';
+import { getResolvedApiKey } from '../lib/api-credentials';
+import { toast } from '../common/ui/Toaster';
 import { useAuthStore } from '../store/useAuthStore';
 import { useChatSelectors } from './useChatSelectors';
 import { selectRuntimeSubscriptionSlice } from '../store/chat/chat-selectors';
@@ -34,7 +37,16 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     console.error('No API key found');
   }
 
-  const socket = useChatSocket(apiKey ?? '');
+  const socketHandshakeSession = useMemo((): ChatSocketHandshakeSession | undefined => {
+    const t = token?.trim();
+    const uid = user?.id?.trim();
+    if (t && uid) {
+      return { token: t, userId: uid };
+    }
+    return undefined;
+  }, [token, user?.id]);
+
+  const socket = useChatSocket(apiKey ?? '', socketHandshakeSession);
 
   const messageScrollerRef = useRef<HTMLElement | null>(null);
   const chatHeaderMenuRef = useRef<HTMLDivElement | null>(null);
@@ -43,7 +55,8 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const discardRecordingRef = useRef<boolean>(false);
-  const typingStopTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  /** Browser `setTimeout` id (`number`); avoid `NodeJS.Timeout` from `@types/node` merge. */
+  const typingStopTimerRef = useRef<number | null>(null);
   const typingStartedRef = useRef(false);
   const previousThreadIdRef = useRef<string | undefined>(undefined);
 
@@ -449,14 +462,29 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     const bootstrap = async (): Promise<void> => {
       try {
         await useChatStore.getState().bootstrapChatApp();
+        if (!cancelled) {
+          useChatStore.getState().setError('');
+        }
       } catch (err) {
         if (cancelled) {
           return;
         }
-        useChatStore.getState().setError(err instanceof Error ? err.message : 'Session expired');
-        clearSession();
-        useChatStore.getState().reset();
-        window.localStorage.removeItem(SELECTED_CONVERSATION_STORAGE_KEY);
+        const message = err instanceof Error ? err.message : 'Could not load chat';
+        useChatStore.getState().setError(message);
+        const status = err instanceof ApiError ? err.status : 0;
+        if (status === 401) {
+          if (!getResolvedApiKey()) {
+            clearSession();
+            useChatStore.getState().reset();
+            window.localStorage.removeItem(SELECTED_CONVERSATION_STORAGE_KEY);
+          } else {
+            /** Same idea as `axios` 401: chat works with API key — drop bad JWT, do not wipe chat user / store. */
+            useAuthStore.getState().clearTokenKeepUser();
+            toast(message);
+          }
+        } else {
+          toast(message);
+        }
       }
     };
 

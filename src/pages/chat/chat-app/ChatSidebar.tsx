@@ -11,6 +11,7 @@ import { ConversationList } from '../../../features/chat-widget/sidebar/Conversa
 import { PeopleDirectory } from '../../../features/chat-widget/sidebar/PeopleDirectory';
 import { SidebarHeader } from '../../../features/chat-widget/sidebar/SidebarHeader';
 import { GroupForm } from '../../../features/chat-widget/sidebar/GroupForm';
+import { useChatStore } from '../../../store/useChatStore';
 import { useChatSidebarState } from './useChatSidebarState';
 
 function PeoplePanel({
@@ -131,65 +132,83 @@ function ChatsPanel({
 }
 
 /** Widget left rail: chats list, people directory, create/edit group flows. */
-export function ChatSidebar(): JSX.Element {
+export function ChatSidebar(): JSX.Element | null {
   const state = useChatSidebarState();
+  const chatLoadError = useChatStore((s) => s.error);
 
   if (!state.user) {
-    return <></>;
+    return null;
   }
+
+  const errorBanner =
+    chatLoadError.trim() !== '' ? (
+      <p className="error-banner" role="alert" style={{ margin: '0.5rem 0.75rem 0', flexShrink: 0 }}>
+        {chatLoadError}
+      </p>
+    ) : null;
 
   switch (state.currentPanel) {
     case WidgetPanelType.PEOPLE:
       return (
-        <PeoplePanel
-          navigateToChats={state.navigateToChats}
-          filteredPeopleDirectory={state.filteredPeopleDirectory}
-          sortedTenantPeers={state.sortedTenantPeers}
-          peopleSearchQuery={state.peopleSearchQuery}
-          setPeopleSearchQuery={state.setPeopleSearchQuery}
-          openingDirectUserId={state.openingDirectUserId}
-          onOpenDirectChat={state.onOpenDirectChat}
-        />
+        <>
+          {errorBanner}
+          <PeoplePanel
+            navigateToChats={state.navigateToChats}
+            filteredPeopleDirectory={state.filteredPeopleDirectory}
+            sortedTenantPeers={state.sortedTenantPeers}
+            peopleSearchQuery={state.peopleSearchQuery}
+            setPeopleSearchQuery={state.setPeopleSearchQuery}
+            openingDirectUserId={state.openingDirectUserId}
+            onOpenDirectChat={state.onOpenDirectChat}
+          />
+        </>
       );
     case WidgetPanelType.NEW_GROUP:
       return (
-        <NewGroupPanel
-          navigateToChatsFromNewGroup={state.navigateToChatsFromNewGroup}
-          creatingGroup={state.creatingGroup}
-        />
+        <>
+          {errorBanner}
+          <NewGroupPanel
+            navigateToChatsFromNewGroup={state.navigateToChatsFromNewGroup}
+            creatingGroup={state.creatingGroup}
+          />
+        </>
       );
     case WidgetPanelType.EDIT_GROUP:
       return (
-        <EditGroupPanel
-          navigateToChatsFromEditGroup={state.navigateToChatsFromEditGroup}
-          editingGroup={state.editingGroup}
-        />
+        <>
+          {errorBanner}
+          <EditGroupPanel
+            navigateToChatsFromEditGroup={state.navigateToChatsFromEditGroup}
+            editingGroup={state.editingGroup}
+          />
+        </>
       );
     case WidgetPanelType.CHATS:
       return (
-        <ChatsPanel
-          filteredConversations={state.filteredConversations}
-          sortedConversations={state.sortedConversations}
-          chatSearchQuery={state.chatSearchQuery}
-          setChatSearchQuery={state.setChatSearchQuery}
-          selectedConversationId={state.selectedConversationId}
-          selectConversation={state.selectConversation}
-          unreadByConversation={state.unreadByConversation}
-          getSingleOtherParticipantId={state.getSingleOtherParticipantId}
-          getConversationTitle={state.getConversationTitle}
-          getConversationSubtitle={state.getConversationSubtitle}
-          isPeerOnline={state.isPeerOnline}
-          menuOpen={state.menuOpen}
-          setMenuOpen={state.setMenuOpen}
-          overflowMenuRef={state.overflowMenuRef}
-          navigateToPeople={state.navigateToPeople}
-          navigateToNewGroup={state.navigateToNewGroup}
-          features={state.features}
-        />
+        <>
+          {errorBanner}
+          <ChatsPanel
+            filteredConversations={state.filteredConversations}
+            sortedConversations={state.sortedConversations}
+            chatSearchQuery={state.chatSearchQuery}
+            setChatSearchQuery={state.setChatSearchQuery}
+            selectedConversationId={state.selectedConversationId}
+            selectConversation={state.selectConversation}
+            unreadByConversation={state.unreadByConversation}
+            getSingleOtherParticipantId={state.getSingleOtherParticipantId}
+            getConversationTitle={state.getConversationTitle}
+            getConversationSubtitle={state.getConversationSubtitle}
+            isPeerOnline={state.isPeerOnline}
+            menuOpen={state.menuOpen}
+            setMenuOpen={state.setMenuOpen}
+            overflowMenuRef={state.overflowMenuRef}
+            navigateToPeople={state.navigateToPeople}
+            navigateToNewGroup={state.navigateToNewGroup}
+            features={state.features}
+          />
+        </>
       );
-    default: {
-      const _exhaustive: never = state.currentPanel;
-      return _exhaustive;
-    }
+    default:
+      return null;
   }
 }

@@ -3,23 +3,23 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
-import { ADMIN_RECENT_CLIENTS_KEY, AdminRoutes } from '../../constants/admin.constants';
+import { ADMIN_RECENT_TENANTS_KEY, AdminRoutes } from '../../constants/admin.constants';
 import {
-  createAdminClientSchema,
-  type CreateAdminClientFormValues
+  createAdminTenantSchema,
+  type CreateAdminTenantFormValues
 } from '../../schemas/admin.schemas';
 import {
   adminKeys,
-  useAdminClientsQuery,
-  useCreateAdminClientMutation,
-  useDeleteAdminClientMutation
+  useAdminTenantsQuery,
+  useCreateAdminTenantMutation,
+  useDeleteAdminTenantMutation
 } from '../../services/admin.service';
-import type { AdminClient } from '../../types/admin.types';
-import { parseAdminClient } from '../../types/admin.types';
+import type { AdminTenant } from '../../types/admin.types';
+import { parseAdminTenant } from '../../types/admin.types';
 
-function readStoredClients(): AdminClient[] {
+function readStoredTenants(): AdminTenant[] {
   try {
-    const raw = sessionStorage.getItem(ADMIN_RECENT_CLIENTS_KEY);
+    const raw = sessionStorage.getItem(ADMIN_RECENT_TENANTS_KEY);
     if (!raw) {
       return [];
     }
@@ -27,61 +27,61 @@ function readStoredClients(): AdminClient[] {
     if (!Array.isArray(arr)) {
       return [];
     }
-    return arr.map((x) => parseAdminClient(x)).filter((c): c is AdminClient => c !== null);
+    return arr.map((x) => parseAdminTenant(x)).filter((c): c is AdminTenant => c !== null);
   } catch {
     return [];
   }
 }
 
-function persistClients(list: AdminClient[]): void {
+function persistTenants(list: AdminTenant[]): void {
   try {
-    sessionStorage.setItem(ADMIN_RECENT_CLIENTS_KEY, JSON.stringify(list));
+    sessionStorage.setItem(ADMIN_RECENT_TENANTS_KEY, JSON.stringify(list));
   } catch {
     /* ignore */
   }
 }
 
-export function AdminClientsView(): JSX.Element {
+export function AdminTenantsView(): JSX.Element {
   const qc = useQueryClient();
-  const clientsQuery = useAdminClientsQuery();
-  const createMut = useCreateAdminClientMutation();
-  const deleteMut = useDeleteAdminClientMutation();
+  const tenantsQuery = useAdminTenantsQuery();
+  const createMut = useCreateAdminTenantMutation();
+  const deleteMut = useDeleteAdminTenantMutation();
 
-  const clients: AdminClient[] =
-    clientsQuery.data !== undefined ? clientsQuery.data : readStoredClients();
+  const tenants: AdminTenant[] =
+    tenantsQuery.data !== undefined ? tenantsQuery.data : readStoredTenants();
 
   useEffect(() => {
-    if (clientsQuery.data !== undefined) {
-      persistClients(clientsQuery.data);
+    if (tenantsQuery.data !== undefined) {
+      persistTenants(tenantsQuery.data);
     }
-  }, [clientsQuery.data]);
+  }, [tenantsQuery.data]);
 
   const {
     register,
     handleSubmit,
     reset,
     formState: { errors }
-  } = useForm<CreateAdminClientFormValues>({
-    resolver: zodResolver(createAdminClientSchema),
+  } = useForm<CreateAdminTenantFormValues>({
+    resolver: zodResolver(createAdminTenantSchema),
     defaultValues: { name: '', email: '', password: '' }
   });
 
   return (
     <>
-      <h1>Clients</h1>
+      <h1>Tenants</h1>
       <p className="admin-shell__muted">
-        Create merchant accounts for the chat platform. Clients load from{' '}
-        <code>GET /api/v1/admin/clients</code> when available; if that request fails, this page falls back to clients
+        Create tenant accounts for the chat platform. The list loads from{' '}
+        <code>GET /api/v1/admin/tenants</code> when available; if that request fails, this page falls back to tenants
         remembered in this browser (session storage).
       </p>
-      {clientsQuery.isError ? (
+      {tenantsQuery.isError ? (
         <p className="admin-shell__muted" style={{ color: '#b45309' }}>
-          Could not refresh clients from the server — showing session storage only.
+          Could not refresh tenants from the server — showing session storage only.
         </p>
       ) : null}
 
       <div className="admin-panel">
-        <h2>New client</h2>
+        <h2>New tenant</h2>
         <form
           className="admin-form-grid"
           onSubmit={handleSubmit(async (values) => {
@@ -89,27 +89,27 @@ export function AdminClientsView(): JSX.Element {
             reset({ name: '', email: '', password: '' });
           })}
         >
-          <input {...register('name')} placeholder="Company / client name" maxLength={200} />
+          <input {...register('name')} placeholder="Company / tenant name" maxLength={200} />
           {errors.name && <p className="admin-error" style={{ color: '#b91c1c' }}>{errors.name.message}</p>}
-          <input {...register('email')} type="email" placeholder="Client login email" />
+          <input {...register('email')} type="email" placeholder="Tenant login email" />
           {errors.email && <p className="admin-error" style={{ color: '#b91c1c' }}>{errors.email.message}</p>}
           <input {...register('password')} type="password" placeholder="Initial password (min 8)" />
           {errors.password && <p className="admin-error" style={{ color: '#b91c1c' }}>{errors.password.message}</p>}
           <button type="submit" disabled={createMut.isPending}>
-            {createMut.isPending ? 'Creating…' : 'Create client'}
+            {createMut.isPending ? 'Creating…' : 'Create tenant'}
           </button>
         </form>
       </div>
 
       <div className="admin-panel">
-        <h2>Clients</h2>
-        {clientsQuery.isPending && clientsQuery.fetchStatus === 'fetching' && clients.length === 0 ? (
+        <h2>Tenants</h2>
+        {tenantsQuery.isPending && tenantsQuery.fetchStatus === 'fetching' && tenants.length === 0 ? (
           <p className="admin-shell__muted" style={{ margin: 0 }}>
-            Loading clients…
+            Loading tenants…
           </p>
-        ) : clients.length === 0 ? (
+        ) : tenants.length === 0 ? (
           <p className="admin-shell__muted" style={{ margin: 0 }}>
-            No clients recorded yet.
+            No tenants recorded yet.
           </p>
         ) : (
           <table className="admin-table">
@@ -122,7 +122,7 @@ export function AdminClientsView(): JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {clients.map((c) => (
+              {tenants.map((c) => (
                 <tr key={c.id}>
                   <td>{c.name}</td>
                   <td>{c.email}</td>
@@ -137,14 +137,14 @@ export function AdminClientsView(): JSX.Element {
                       className="admin-btn-ghost admin-btn-danger"
                       disabled={deleteMut.isPending}
                       onClick={() => {
-                        if (!window.confirm(`Delete client “${c.name}”? This cannot be undone.`)) {
+                        if (!window.confirm(`Delete tenant “${c.name}”? This cannot be undone.`)) {
                           return;
                         }
                         void (async (): Promise<void> => {
                           await deleteMut.mutateAsync(c.id);
-                          const next = clients.filter((x) => x.id !== c.id);
-                          persistClients(next);
-                          qc.setQueryData(adminKeys.clients(), next);
+                          const next = tenants.filter((x) => x.id !== c.id);
+                          persistTenants(next);
+                          qc.setQueryData(adminKeys.tenants(), next);
                         })();
                       }}
                     >

@@ -8,6 +8,7 @@ export function WidgetUnauthenticatedShell({
 }: WidgetUnauthenticatedShellProps): JSX.Element {
   return wrapWidgetContent(
     config,
-    <WidgetUnauthenticatedContent config={config} widgetMissingTenant={isMissingTenant} />
+    <WidgetUnauthenticatedContent config={config} widgetMissingTenant={isMissingTenant} />,
+    { panelInitiallyOpen: true }
   );
 }

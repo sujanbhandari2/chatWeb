@@ -8,10 +8,12 @@ type AuthState = {
   sessionHydrated: boolean;
   hydrate: () => void;
   setSession: (token: string, user: AuthUser) => void;
+  /** Clears JWT only; keeps chat user in localStorage (widget + API key after bad/expired Bearer). */
+  clearTokenKeepUser: () => void;
   clearSession: () => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   token: '',
   user: null,
   sessionHydrated: false,
@@ -42,6 +44,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   setSession: (token, user) => {
     window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token, user }));
     set({ token, user });
+  },
+  clearTokenKeepUser: () => {
+    const user = get().user;
+    if (!user) {
+      return;
+    }
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token: '', user }));
+    set({ token: '', user });
   },
   clearSession: () => {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);

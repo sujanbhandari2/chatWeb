@@ -29,9 +29,9 @@ Entries: [`src/main.tsx`](../src/main.tsx) (test app) and [`src/main-widget.tsx`
 
 ## Security model (embed)
 
-Untrusted hosts must not enable uploads, branding, or feature flags via query string. Keys stripped from `window`/URL are listed in **`CLIENT_VENDOR_TOP_KEYS`** in `widget-runtime.utils.ts` (includes `features`, `app`, `colors`, `uiElements`, …). From embed `backend`, **`tenantId`**, **`lockTenant`**, **`hideTenantField`**, **`accessKey`**, **`apiKey`**, and **`secretKey`** are kept so the host can supply `X-Tenant-Id` and `X-Api-Key` (`accessKey:secretKey` when both halves are set; see [WIDGET_WEBSITE.md](./WIDGET_WEBSITE.md)).
+Untrusted hosts must not enable uploads, branding, or feature flags via query string. Keys stripped from `window`/URL are listed in **`CLIENT_VENDOR_TOP_KEYS`** in `widget-runtime.utils.ts` (includes `features`, `app`, `colors`, `uiElements`, …). From embed `backend`, **`companyId`** (legacy **`tenantId`**), **`lockTenant`**, **`hideTenantField`**, **`accessKey`**, **`apiKey`**, and **`secretKey`** are kept for URL / layout / credential resolution only — **`X-Api-Key`** is the chat auth header (see [WIDGET_WEBSITE.md](./WIDGET_WEBSITE.md)).
 
-**Client flags are not authorization** — enforce sensitive actions on the server.
+**Browser-side / widget flags are not authorization** — enforce sensitive actions on the server.
 
 ## Adding a feature flag
 

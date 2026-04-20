@@ -2,10 +2,35 @@ import { io, type Socket } from 'socket.io-client';
 import { getResolvedSocketUrl } from '../utils/runtime-endpoints.utils';
 import { formatWireXApiKeyValue } from '../utils/chat-api-key.utils';
 
-/** Handshake: `X-Api-Key` and the same value in `auth` (for WS upgrades where browsers omit `extraHeaders`). No JWT. */
-export function createChatSocket(apiKey: string): Socket {
+/** Tenant JWT + `ChatUser.id` for full session (tenant room, `join_conversation`, etc.). Omit for API-key-only connect. */
+export type ChatSocketHandshakeSession = {
+  token: string;
+  /** `ChatUser.id` as numeric string; server also accepts `chatUserId` in `auth`. */
+  userId: string;
+};
+
+/** Handshake: `X-Api-Key` (+ optional `Authorization`) and mirrored values in `auth` for WS upgrades. */
+export function createChatSocket(apiKey: string, session?: ChatSocketHandshakeSession | null): Socket {
   const wireKey = formatWireXApiKeyValue(apiKey) ?? apiKey;
   const pollingHeaders: Record<string, string> = { 'X-Api-Key': wireKey };
+  const token = session?.token?.trim();
+  const userId = session?.userId?.trim();
+  if (token) {
+    pollingHeaders.Authorization = `Bearer ${token}`;
+  }
+
+  const auth: Record<string, string> = {
+    apiKey: wireKey,
+    xApiKey: wireKey
+  };
+  if (token) {
+    auth.token = token;
+  }
+  if (userId) {
+    auth.userId = userId;
+    auth.chatUserId = userId;
+  }
+
   return io(getResolvedSocketUrl(), {
     path: '/socket.io/',
     /** In dev, avoid infinite reconnect spam when nothing speaks Engine.IO on `VITE_SOCKET_URL` / API origin. */
@@ -22,10 +47,6 @@ export function createChatSocket(apiKey: string): Socket {
         extraHeaders: pollingHeaders
       }
     },
-    auth: {
-      /** Same value as `X-Api-Key` header — many gateways read this on WS-only handshakes. */
-      apiKey: wireKey,
-      xApiKey: wireKey
-    }
+    auth
   });
 }

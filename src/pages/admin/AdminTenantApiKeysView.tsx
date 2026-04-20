@@ -9,9 +9,9 @@ import {
   type CreateAdminApiKeyFormValues
 } from '../../schemas/admin.schemas';
 import {
-  useAdminClientApiKeysQuery,
-  useCreateAdminClientApiKeyMutation,
-  useRevokeAdminClientApiKeyMutation
+  useAdminTenantApiKeysQuery,
+  useCreateAdminTenantApiKeyMutation,
+  useRevokeAdminTenantApiKeyMutation
 } from '../../services/admin.service';
 import {
   parseAdminApiKeyFromCreateResponse,
@@ -40,15 +40,15 @@ async function copyWithToast(label: string, text: string): Promise<void> {
   }
 }
 
-export function AdminClientApiKeysView(): JSX.Element {
+export function AdminTenantApiKeysView(): JSX.Element {
   const { userId = '' } = useParams<{ userId: string }>();
   const location = useLocation();
   const state = (location.state ?? {}) as LocationState;
   const title = state.name?.trim() || `User ${userId}`;
 
-  const { data, isLoading, isError } = useAdminClientApiKeysQuery(userId);
-  const createMut = useCreateAdminClientApiKeyMutation(userId);
-  const revokeMut = useRevokeAdminClientApiKeyMutation(userId);
+  const { data, isLoading, isError } = useAdminTenantApiKeysQuery(userId);
+  const createMut = useCreateAdminTenantApiKeyMutation(userId);
+  const revokeMut = useRevokeAdminTenantApiKeyMutation(userId);
 
   const rows = useMemo(
     () => unwrapAdminList<AdminApiKeyRow>(data ?? [], parseAdminApiKeyRow),
@@ -72,7 +72,7 @@ export function AdminClientApiKeysView(): JSX.Element {
   return (
     <>
       <p style={{ margin: '0 0 0.5rem' }}>
-        <Link to={AdminRoutes.CLIENTS}>← Clients</Link>
+        <Link to={AdminRoutes.TENANTS}>← Tenants</Link>
       </p>
       <h1>API keys</h1>
       <p className="admin-shell__muted">
@@ -119,7 +119,7 @@ export function AdminClientApiKeysView(): JSX.Element {
         <div className="admin-panel" style={{ border: '2px solid #2563eb' }}>
           <h2>Copy this credential now</h2>
           <p className="admin-shell__muted" style={{ marginTop: 0 }}>
-            Store this credential; the web client sends it as the{' '}
+            Store this credential; the browser sends it as the{' '}
             <code style={{ fontSize: '0.9em' }}>X-Api-Key</code> header (same id:secret value below). This value will
             not be shown again—store it in your secrets manager.
           </p>
@@ -155,7 +155,7 @@ export function AdminClientApiKeysView(): JSX.Element {
         {isLoading ? <p className="admin-shell__muted">Loading…</p> : null}
         {isError ? (
           <p className="admin-error" style={{ color: '#b91c1c' }}>
-            Could not load keys (check client id and permissions).
+            Could not load keys (check tenant id and permissions).
           </p>
         ) : null}
         {!isLoading && !isError && rows.length === 0 ? (

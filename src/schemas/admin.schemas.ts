@@ -7,13 +7,13 @@ export const adminLoginSchema = z.object({
 
 export type AdminLoginFormValues = z.infer<typeof adminLoginSchema>;
 
-export const createAdminClientSchema = z.object({
+export const createAdminTenantSchema = z.object({
   name: z.string().min(1).max(200),
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters')
 });
 
-export type CreateAdminClientFormValues = z.infer<typeof createAdminClientSchema>;
+export type CreateAdminTenantFormValues = z.infer<typeof createAdminTenantSchema>;
 
 export const createAdminApiKeySchema = z.object({
   name: z.string().max(120).optional(),

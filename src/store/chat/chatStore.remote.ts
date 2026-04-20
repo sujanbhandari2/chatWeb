@@ -126,6 +126,12 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         });
         const messagesPage = await chatApi.getMessagesPage(initialConversationId);
         get().setMessages(sortMessagesOldestToNewest(messagesPage.data.map(normalizeMessage)));
+      } else {
+        get().setSelectedConversationId('');
+        get().setMessages([]);
+        if (persistedConversationId && !hasPersistedConversation) {
+          window.localStorage.removeItem(SELECTED_CONVERSATION_STORAGE_KEY);
+        }
       }
     },
 
@@ -146,6 +152,11 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
         }
         const createdConversation = await chatApi.createDirectConversation(target.id, user.id);
         await get().refreshConversations();
+        if (createdConversation.id) {
+          get().setConversations((prev) =>
+            prev.some((c) => c.id === createdConversation.id) ? prev : [createdConversation, ...prev]
+          );
+        }
         get().setWidgetRailPane(WidgetPanelType.CHATS);
         await get().selectConversation(createdConversation.id);
       } catch (err) {

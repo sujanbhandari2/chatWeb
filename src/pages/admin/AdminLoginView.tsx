@@ -26,7 +26,7 @@ export function AdminLoginView(): JSX.Element {
   });
 
   if (sessionHydrated && token?.trim()) {
-    return <Navigate to={AdminRoutes.CLIENTS} replace />;
+    return <Navigate to={AdminRoutes.TENANTS} replace />;
   }
 
   if (!sessionHydrated) {
@@ -41,7 +41,7 @@ export function AdminLoginView(): JSX.Element {
     <div className="admin-login-page">
       <div className="admin-login-card">
         <h1>Admin sign in</h1>
-        <p className="admin-shell__muted">Use your admin JWT to manage clients and API keys.</p>
+        <p className="admin-shell__muted">Use your admin JWT to manage tenants and API keys.</p>
         <form
           className="admin-form-grid"
           onSubmit={handleSubmit(async (values) => {
@@ -52,7 +52,7 @@ export function AdminLoginView(): JSX.Element {
                 setCredentialError('Server did not return a token.');
                 return;
               }
-              navigate(AdminRoutes.CLIENTS, { replace: true });
+              navigate(AdminRoutes.TENANTS, { replace: true });
             } catch {
               /* toast from service */
             }

@@ -1,4 +1,4 @@
-export interface AdminClient {
+export interface AdminTenant {
   id: string;
   name: string;
   email: string;
@@ -39,7 +39,7 @@ export function pickBearerToken(payload: unknown, depth = 0): string | undefined
   return undefined;
 }
 
-export function parseAdminClient(raw: unknown): AdminClient | null {
+export function parseAdminTenant(raw: unknown): AdminTenant | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return null;
   }
@@ -55,17 +55,17 @@ export function parseAdminClient(raw: unknown): AdminClient | null {
   };
 }
 
-/** POST /admin/clients may return the entity or `{ data }`. */
-export function extractAdminClientFromCreateResponse(
+/** POST /admin/tenants may return the entity or `{ data }`. */
+export function extractAdminTenantFromCreateResponse(
   res: unknown,
-  fallback: Pick<AdminClient, 'name' | 'email'>
-): AdminClient | null {
-  const direct = parseAdminClient(res);
+  fallback: Pick<AdminTenant, 'name' | 'email'>
+): AdminTenant | null {
+  const direct = parseAdminTenant(res);
   if (direct) {
     return direct;
   }
   if (res && typeof res === 'object' && 'data' in res) {
-    const inner = parseAdminClient((res as { data: unknown }).data);
+    const inner = parseAdminTenant((res as { data: unknown }).data);
     if (inner) {
       return inner;
     }

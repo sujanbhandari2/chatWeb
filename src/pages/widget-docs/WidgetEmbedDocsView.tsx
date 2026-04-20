@@ -13,7 +13,7 @@ export default function WidgetEmbedDocsView(): JSX.Element {
         <div className="widget-embed-docs__header-inner">
           <h1>Embed the chat widget on your website</h1>
           <p>
-            The widget needs a client API credential (<strong>
+            The widget needs a tenant API credential (<strong>
               merged <code>id:secret</code>
             </strong>{' '}
             as the <code>X-Api-Key</code> header) on every load. Without it, visitors only see <strong>Unauthorized</strong>. This
@@ -36,10 +36,10 @@ export default function WidgetEmbedDocsView(): JSX.Element {
           <h2>1. Get an access key</h2>
           <ol>
             <li>
-              Open the <Link to={AdminRoutes.LOGIN}>admin console</Link>, sign in, and create a <strong>client</strong>.
+              Open the <Link to={AdminRoutes.LOGIN}>admin console</Link>, sign in, and create a <strong>tenant</strong>.
             </li>
             <li>
-              Open <strong>API keys</strong> for that client and create a key. Copy the secret once and store it{' '}
+              Open <strong>API keys</strong> for that tenant and create a key. Copy the secret once and store it{' '}
               <strong>server-side</strong> (env / vault)—never in public static HTML or git.
             </li>
           </ol>
@@ -79,8 +79,7 @@ export default function WidgetEmbedDocsView(): JSX.Element {
   window.__HEALTHCHAT_WIDGET_CONFIG__ = {
     backend: {
       accessKey: 'YOUR_ACCESS_KEY_ID',
-      secretKey: 'YOUR_SECRET',
-      companyId: 'optional-company-for-x-company-id'
+      secretKey: 'YOUR_SECRET'
     }
   };
 </script>`}</pre>
@@ -98,7 +97,7 @@ export default function WidgetEmbedDocsView(): JSX.Element {
           </p>
           <pre className="widget-embed-docs__pre">{`<iframe
   title="Support chat"
-  src="${ORIGIN}/widget.html?companyId=my-company&position=right"
+  src="${ORIGIN}/widget.html?position=right"
   style="position:fixed;bottom:0;right:0;width:400px;height:580px;border:0;z-index:99999"
   allow="clipboard-write"
 ></iframe>`}</pre>
@@ -108,36 +107,27 @@ export default function WidgetEmbedDocsView(): JSX.Element {
           </p>
         </section>
 
-        <section id="company">
-          <h2>5. Optional: X-Company-Id</h2>
-          <p>
-            If your API expects a company scope, set <code>backend.companyId</code> or add <code>?companyId=</code> to
-            the widget URL (legacy <code>?tenantId=</code> is still read). It is sent as <code>X-Company-Id</code>{' '}
-            together with <code>X-Api-Key</code>.
-          </p>
-        </section>
-
         <section id="users">
-          <h2>6. End users inside the widget</h2>
+          <h2>5. End users inside the widget</h2>
           <p>
-            After the embed key is present, visitors enter name and email once. The client calls{' '}
-            <code>POST /api/v1/chat/users</code> with <code>email</code> and <code>name</code> (optional on the
-            server; the widget still collects a display name). <code>backend.companyId</code> is sent as{' '}
-            <code>X-Company-Id</code>, not in the JSON body. There is no separate login/register API. Optional JWTs from
-            your server are used when returned.
+            After the embed key is present, visitors enter provider id, provider user id, email, and optional display
+            name. The widget calls <code>POST /api/v1/chat/users</code> with <code>CreateUserDto</code>:{' '}
+            <code>providerId</code>, <code>providerUserId</code>, <code>email</code>, and optional <code>name</code>. The
+            app does not send <code>X-Company-Id</code>. There is no separate visitor login API. Optional JWTs from your
+            server are used when returned.
           </p>
         </section>
 
         <section id="admin-separate">
-          <h2>7. Admin API vs embed key</h2>
+          <h2>6. Admin API vs embed key</h2>
           <p>
-            <code>/api/v1/admin/…</code> uses an <strong>admin JWT</strong>, not the client embed key. The embed key is
+            <code>/api/v1/admin/…</code> uses an <strong>admin JWT</strong>, not the tenant embed key. The embed key is
             not attached to admin routes (<code>src/lib/axios.ts</code>).
           </p>
         </section>
 
         <section id="troubleshooting">
-          <h2>8. Troubleshooting</h2>
+          <h2>7. Troubleshooting</h2>
           <div className="widget-embed-docs__table-wrap">
             <table className="widget-embed-docs__table">
               <thead>
@@ -158,7 +148,7 @@ export default function WidgetEmbedDocsView(): JSX.Element {
                 </tr>
                 <tr>
                   <td>401 from API</td>
-                  <td>Revoked key, wrong <code>VITE_API_URL</code>, or missing company id if required.</td>
+                  <td>Revoked key or wrong <code>VITE_API_URL</code> / API base.</td>
                 </tr>
                 <tr>
                   <td>CORS errors</td>

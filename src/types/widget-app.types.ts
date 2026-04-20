@@ -30,7 +30,7 @@ export type WidgetUnauthenticatedShellProps = {
   isMissingTenant: boolean;
 };
 
-export type WidgetUnauthorizedReason = 'missingApiKey' | 'missingCompany';
+export type WidgetUnauthorizedReason = 'missingApiKey';
 
 export type WidgetUnauthorizedShellProps = {
   config: WidgetInitConfig;

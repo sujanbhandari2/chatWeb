@@ -355,8 +355,7 @@ export function applyWidgetRuntimeFromConfig(config: WidgetInitConfig): void {
       accessKey: b?.accessKey,
       apiKey: b?.apiKey,
       secretKey: b?.secretKey
-    }),
-    companyId: b?.companyId
+    })
   });
 }
 

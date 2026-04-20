@@ -1,29 +1,10 @@
 import axios from 'axios';
 import { getApiBaseUrl, getResolvedApiTimeoutMs } from '../utils/runtime-endpoints.utils';
-import { getResolvedApiKey, resolveEffectiveXCompanyId } from './api-credentials';
+import { getResolvedApiKey } from './api-credentials';
 import { formatWireXApiKeyValue } from '../utils/chat-api-key.utils';
 import { useAdminAuthStore } from '../store/useAdminAuthStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { ApiError } from './api-error';
-
-function readXCompanyIdHeader(headers: unknown): string | undefined {
-  if (!headers || typeof headers !== 'object') {
-    return undefined;
-  }
-  const h = headers as Record<string, unknown> & { get?: (key: string) => unknown };
-  if (typeof h.get === 'function') {
-    const v = h.get('X-Company-Id') ?? h.get('x-company-id');
-    if (typeof v === 'string') {
-      return v;
-    }
-    if (Array.isArray(v) && typeof v[0] === 'string') {
-      return v[0];
-    }
-    return undefined;
-  }
-  const v = h['X-Company-Id'] ?? h['x-company-id'];
-  return typeof v === 'string' ? v : undefined;
-}
 
 function readAuthorizationHeader(headers: unknown): string | undefined {
   if (!headers || typeof headers !== 'object') {
@@ -41,6 +22,19 @@ function readAuthorizationHeader(headers: unknown): string | undefined {
     return undefined;
   }
   const v = h.Authorization ?? h.authorization;
+  return typeof v === 'string' ? v : undefined;
+}
+
+function readXApiKeyHeader(headers: unknown): string | undefined {
+  if (!headers || typeof headers !== 'object') {
+    return undefined;
+  }
+  const h = headers as Record<string, unknown> & { get?: (key: string) => unknown };
+  if (typeof h.get === 'function') {
+    const v = h.get('X-Api-Key') ?? h.get('x-api-key');
+    return typeof v === 'string' ? v : undefined;
+  }
+  const v = h['X-Api-Key'] ?? h['x-api-key'];
   return typeof v === 'string' ? v : undefined;
 }
 
@@ -76,9 +70,17 @@ apiAxios.interceptors.request.use((config) => {
     if (apiKey) {
       config.headers['X-Api-Key'] = apiKey;
     }
-    const companyId = resolveEffectiveXCompanyId(readXCompanyIdHeader(config.headers));
-    if (companyId) {
-      config.headers['X-Company-Id'] = companyId;
+  }
+
+  /**
+   * Chat REST is `ApiKeyGuard`-first; a stale widget/tenant JWT must not be sent or the server may 401
+   * and the UI would bounce (bootstrap catch + session reset).
+   */
+  if (!isAdminRoute && path.includes('/v1/chat/') && formatWireXApiKeyValue(getResolvedApiKey())) {
+    if (typeof config.headers.delete === 'function') {
+      config.headers.delete('Authorization');
+    } else {
+      delete (config.headers as Record<string, unknown>).Authorization;
     }
   }
 
@@ -100,8 +102,13 @@ apiAxios.interceptors.response.use(
         if (isAdminArea) {
           useAdminAuthStore.getState().clearSession();
         } else if (!isAdminLoginFailure && hadBearer) {
-          /** API-key–only chat sessions use empty Bearer; do not wipe user on 401 from key/chat alone. */
-          useAuthStore.getState().clearSession();
+          const hadChatApiKey = Boolean(readXApiKeyHeader(error.config?.headers)) && url.includes('/v1/chat/');
+          if (hadChatApiKey) {
+            /** Chat routes work with `X-Api-Key`; drop expired tenant JWT without removing the chat profile. */
+            useAuthStore.getState().clearTokenKeepUser();
+          } else {
+            useAuthStore.getState().clearSession();
+          }
         }
       }
       return Promise.reject(ApiError.fromAxios(error));

@@ -6,5 +6,7 @@ export function WidgetUnauthorizedShell({
   config,
   reason = 'missingApiKey'
 }: WidgetUnauthorizedShellProps): JSX.Element {
-  return wrapWidgetContent(config, <WidgetUnauthorizedContent reason={reason} />);
+  return wrapWidgetContent(config, <WidgetUnauthorizedContent reason={reason} />, {
+    panelInitiallyOpen: true
+  });
 }

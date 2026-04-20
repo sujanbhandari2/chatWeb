@@ -1,16 +1,21 @@
 import { z } from 'zod';
 
-const nameSchema = z.string().min(1).max(120);
+/** Identity provider or source system key (`CreateUserDto.providerId`). */
+const providerIdSchema = z.string().min(1, 'Provider id is required').max(120);
+/** User id from that provider / your system (`CreateUserDto.providerUserId`). */
+const providerUserIdSchema = z.string().min(1, 'Provider user id is required').max(256);
 const emailSchema = z.string().email();
-const companyIdSchema = z.string().min(1, 'Company is required').max(120);
+/** Display name; optional on API (defaults server-side). */
+const nameSchema = z.string().max(120).optional();
 
 /**
- * Widget bootstrap: company sets `X-Company-Id`; profile is `POST /api/v1/chat/users`.
+ * Widget bootstrap: `POST /api/v1/chat/users` (`CreateUserDto`).
  */
 export const provisionUserSchema = z.object({
-  companyId: companyIdSchema,
-  name: nameSchema,
-  email: emailSchema
+  providerId: providerIdSchema,
+  providerUserId: providerUserIdSchema,
+  email: emailSchema,
+  name: nameSchema
 });
 
 export type ProvisionUserInput = z.infer<typeof provisionUserSchema>;

@@ -39,9 +39,16 @@ function normalizeConversationFromApi(raw: unknown): Conversation {
     raw.created_at
   );
   const createdAt = pickIso(raw.createdAt, raw.created_at, updatedAt);
+  const id = String(raw.id ?? raw.uuid ?? raw.conversation_id ?? raw.conversationId ?? '').trim();
+  const participantsRaw = raw.participants;
+  const participants = Array.isArray(participantsRaw)
+    ? (participantsRaw as Conversation['participants'])
+    : [];
   const base = { ...(raw as unknown as Conversation) };
   return {
     ...base,
+    id: id || String(base.id ?? ''),
+    participants: participants.length > 0 ? participants : base.participants ?? [],
     companyId,
     ...(updatedAt ? { updatedAt } : {}),
     ...(createdAt ? { createdAt } : {})
@@ -82,14 +89,13 @@ export const listConversations = (forUserId: string): Promise<Conversation[]> =>
     .get<unknown>(`${API_PATHS.CHAT.CONVERSATIONS}?${new URLSearchParams({ forUserId })}`)
     .then((raw) => unwrapArray<unknown>(raw).map(normalizeConversationFromApi));
 
-export const createConversation = (
-  body: {
-    isGlobal?: boolean;
-    isGroupChat?: boolean;
-    creatorUserId?: string;
-    participantIds?: string[];
-  } = {}
-): Promise<Conversation> =>
+/** Chat API `CreateConversationDto` — DIRECT/SUPPORT may omit `participantIds` and add via `POST .../participants`. */
+export type CreateChatConversationBody =
+  | { type: 'DIRECT'; participantIds?: string[] }
+  | { type: 'GROUP'; creatorUserId: string; participantIds?: string[] }
+  | { type: 'SUPPORT'; participantIds?: string[] };
+
+export const createConversation = (body: CreateChatConversationBody): Promise<Conversation> =>
   apiService.post<unknown>(API_PATHS.CHAT.CONVERSATIONS, body).then(normalizeConversationFromApi);
 
 export const addConversationParticipant = (
@@ -184,14 +190,19 @@ export async function createDirectConversation(
   targetUserId: string,
   currentUserId: string
 ): Promise<Conversation> {
-  const created = await createConversation({});
-  const convId = created.id;
-  if (!convId) {
-    throw new Error('Invalid conversation response');
+  const a = targetUserId.trim();
+  const b = currentUserId.trim();
+  if (!a || !b) {
+    throw new Error('Direct conversation requires two chat user ids');
   }
-  await addConversationParticipant(convId, currentUserId);
-  await addConversationParticipant(convId, targetUserId);
-  const list = await listConversations(currentUserId);
+  const created = await createConversation({ type: 'DIRECT' });
+  const convId = String(created.id ?? '').trim();
+  if (!convId) {
+    throw new Error('Invalid conversation response: missing id');
+  }
+  await addConversationParticipant(convId, b);
+  await addConversationParticipant(convId, a);
+  const list = await listConversations(b);
   return list.find((c) => c.id === convId) ?? created;
 }
 
@@ -205,15 +216,14 @@ export async function createGroupConversation(
   }
   const extras = participantIds.slice(1);
   return createConversation({
-    isGroupChat: true,
+    type: 'GROUP',
     creatorUserId,
     ...(extras.length > 0 ? { participantIds: extras } : {})
-  }).then(normalizeConversationFromApi);
+  });
 }
 
-/** `GET /api/v1/chat/clients` — company ids where the client has chat profiles. */
-export const listChatClients = (): Promise<unknown[]> =>
-  apiService.get<unknown>(API_PATHS.CHAT.CLIENTS).then((raw) => unwrapArray<unknown>(raw));
+/** `GET /api/v1/chat/tenant` — tenant context for the API key (e.g. `{ tenantId }`). */
+export const getChatTenant = (): Promise<unknown> => apiService.get<unknown>(API_PATHS.CHAT.TENANT);
 
 export const listChatUsers = (): Promise<unknown[]> =>
   apiService.get<unknown>(API_PATHS.CHAT.USERS).then((raw) => {

@@ -3,8 +3,8 @@ import type { WidgetInitConfig } from './schemas/widget.schemas';
 import WidgetChatApp from './pages/chat/widget-chat-app';
 import { AdminRoutes } from './constants/admin.constants';
 import { AdminAuthGuard } from './pages/admin/AdminAuthGuard';
-import { AdminClientApiKeysView } from './pages/admin/AdminClientApiKeysView';
-import { AdminClientsView } from './pages/admin/AdminClientsView';
+import { AdminTenantApiKeysView } from './pages/admin/AdminTenantApiKeysView';
+import { AdminTenantsView } from './pages/admin/AdminTenantsView';
 import { AdminLayout } from './pages/admin/AdminLayout';
 import { AdminLoginView } from './pages/admin/AdminLoginView';
 import WidgetEmbedDocsView from './pages/widget-docs/WidgetEmbedDocsView';
@@ -23,9 +23,9 @@ export default function App(props: AppProps = {}): JSX.Element {
         <Route path="/admin/login" element={<AdminLoginView />} />
         <Route path="/admin" element={<AdminAuthGuard />}>
           <Route element={<AdminLayout />}>
-            <Route index element={<Navigate to={AdminRoutes.CLIENTS} replace />} />
-            <Route path="clients" element={<AdminClientsView />} />
-            <Route path="clients/:userId/keys" element={<AdminClientApiKeysView />} />
+            <Route index element={<Navigate to={AdminRoutes.TENANTS} replace />} />
+            <Route path="tenants" element={<AdminTenantsView />} />
+            <Route path="tenants/:userId/keys" element={<AdminTenantApiKeysView />} />
           </Route>
         </Route>
         <Route path="/*" element={<WidgetChatApp widgetConfig={props.widgetConfig} />} />

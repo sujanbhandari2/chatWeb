@@ -12,6 +12,11 @@ export type WidgetChatProps = {
   config: WidgetInitConfig;
   children: ReactNode;
   panelHeaderCenterText?: string;
+  /**
+   * When set, overrides `interactions.defaultOpen` for the initial `open` state only.
+   * Use for loading / auth / error shells so content is not hidden behind a closed panel.
+   */
+  panelInitiallyOpen?: boolean;
 };
 
 function getFocusableElements(root: HTMLElement): HTMLElement[] {
@@ -27,7 +32,12 @@ function isHorizontalLeft(position: string): boolean {
 }
 
 /** Floating chat button and slide-out panel; renders `children` inside the panel. */
-export function WidgetChat({ config, children, panelHeaderCenterText }: WidgetChatProps): JSX.Element {
+export function WidgetChat({
+  config,
+  children,
+  panelHeaderCenterText,
+  panelInitiallyOpen
+}: WidgetChatProps): JSX.Element {
   const panelId = useId().replace(/:/g, '');
   const rootRef = useRef<HTMLDivElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -39,7 +49,7 @@ export function WidgetChat({ config, children, panelHeaderCenterText }: WidgetCh
     resolveWidgetShellSections(config);
   const brandPrefix = styling.classPrefix;
 
-  const [open, setOpen] = useState(interactions.defaultOpen);
+  const [open, setOpen] = useState(() => panelInitiallyOpen ?? interactions.defaultOpen);
 
   const close = useCallback((): void => {
     setOpen(false);
@@ -97,11 +107,18 @@ export function WidgetChat({ config, children, panelHeaderCenterText }: WidgetCh
     return () => panel.removeEventListener('keydown', onKeyDown);
   }, [open, interactions.closeOnEscape, close]);
 
+  /** Ignore stray `mousedown` right after the panel opens (refresh / programmatic open / embed layout). */
+  const outsideCloseGraceUntilRef = useRef(0);
+
   useEffect(() => {
     if (!open || !interactions.closeOnClickOutside) {
       return undefined;
     }
+    outsideCloseGraceUntilRef.current = performance.now() + 320;
     const onMouseDown = (e: MouseEvent): void => {
+      if (performance.now() < outsideCloseGraceUntilRef.current) {
+        return;
+      }
       const t = e.target as Node;
       if (panelRef.current?.contains(t) || launcherRef.current?.contains(t)) {
         return;

@@ -2,16 +2,18 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { chatRealtimeEvents } from '../constants/chat-realtime.constants';
-import { createChatSocket } from '../lib/chat-socket';
+import { createChatSocket, type ChatSocketHandshakeSession } from '../lib/chat-socket';
 import { conversationKeys } from '../services/conversations.service';
 import type { Message } from '../types/chat';
 
-/** Socket.IO for chat; connects with API key only; reconnects when the key changes. */
-export function useChatSocket(apiKey: string): Socket | null {
+/** Socket.IO for chat; API key required; optional tenant JWT + chat user id for full realtime session. */
+export function useChatSocket(apiKey: string, session?: ChatSocketHandshakeSession | null): Socket | null {
   const qc = useQueryClient();
   const qcRef = useRef(qc);
   qcRef.current = qc;
   const [socket, setSocket] = useState<Socket | null>(null);
+  const sessionToken = session?.token ?? '';
+  const sessionUserId = session?.userId ?? '';
 
   useEffect(() => {
     if (!apiKey?.trim()) {
@@ -19,7 +21,7 @@ export function useChatSocket(apiKey: string): Socket | null {
       return undefined;
     }
 
-    const s = createChatSocket(apiKey);
+    const s = createChatSocket(apiKey, session);
 
     const onMessage = (message: Message): void => {
       const client = qcRef.current;
@@ -35,7 +37,7 @@ export function useChatSocket(apiKey: string): Socket | null {
       s.disconnect();
       setSocket(null);
     };
-  }, [apiKey]);
+  }, [apiKey, sessionToken, sessionUserId]);
 
   return socket;
 }

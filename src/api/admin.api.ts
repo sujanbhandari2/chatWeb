@@ -1,13 +1,13 @@
 import { API_PATHS } from '../constants/api.constant';
 import { apiService } from '../lib/api-service';
-import type { AdminClient } from '../types/admin.types';
-import { parseAdminClient } from '../types/admin.types';
+import type { AdminTenant } from '../types/admin.types';
+import { parseAdminTenant } from '../types/admin.types';
 
 export type AdminLoginBody = { email: string; password: string };
 
-export type CreateAdminClientBody = { name: string; email: string; password: string };
+export type CreateAdminTenantBody = { name: string; email: string; password: string };
 
-export type UpdateAdminClientBody = {
+export type UpdateAdminTenantBody = {
   name?: string;
   email?: string;
   password?: string;
@@ -19,7 +19,7 @@ export type CreateAdminApiKeyBody = {
   expiresAt?: string;
 };
 
-const clientBase = (id: string) => `${API_PATHS.ADMIN.CLIENTS}/${encodeURIComponent(id)}`;
+const tenantBase = (id: string) => `${API_PATHS.ADMIN.TENANTS}/${encodeURIComponent(id)}`;
 
 function unwrapAdminList(raw: unknown): unknown[] {
   if (Array.isArray(raw)) {
@@ -42,26 +42,26 @@ export const loginAdmin = (body: AdminLoginBody): Promise<unknown> =>
 
 export const getAdminProfile = (): Promise<unknown> => apiService.get<unknown>(API_PATHS.ADMIN.ME);
 
-/** `GET {baseURL}/v1/admin/clients` → full URL `/api/v1/admin/clients` with default `VITE_API_URL` base. */
-export const listAdminClients = (): Promise<AdminClient[]> =>
-  apiService.get<unknown>(API_PATHS.ADMIN.CLIENTS).then((raw) => {
+/** `GET {baseURL}/v1/admin/tenants` → `/api/v1/admin/tenants` with default `VITE_API_URL` base (`…/api`). */
+export const listAdminTenants = (): Promise<AdminTenant[]> =>
+  apiService.get<unknown>(API_PATHS.ADMIN.TENANTS).then((raw) => {
     const rows = unwrapAdminList(raw);
-    return rows.map(parseAdminClient).filter((c): c is AdminClient => c !== null);
+    return rows.map(parseAdminTenant).filter((c): c is AdminTenant => c !== null);
   });
 
-export const createAdminClient = (body: CreateAdminClientBody): Promise<unknown> =>
-  apiService.post<unknown>(API_PATHS.ADMIN.CLIENTS, body);
+export const createAdminTenant = (body: CreateAdminTenantBody): Promise<unknown> =>
+  apiService.post<unknown>(API_PATHS.ADMIN.TENANTS, body);
 
-export const updateAdminClient = (id: string, body: UpdateAdminClientBody): Promise<unknown> =>
-  apiService.patch<unknown>(clientBase(id), body);
+export const updateAdminTenant = (id: string, body: UpdateAdminTenantBody): Promise<unknown> =>
+  apiService.patch<unknown>(tenantBase(id), body);
 
-export const deleteAdminClient = (id: string): Promise<unknown> => apiService.delete<unknown>(clientBase(id));
+export const deleteAdminTenant = (id: string): Promise<unknown> => apiService.delete<unknown>(tenantBase(id));
 
-export const listAdminClientApiKeys = (userId: string): Promise<unknown> =>
-  apiService.get<unknown>(`${clientBase(userId)}/api-keys`);
+export const listAdminTenantApiKeys = (userId: string): Promise<unknown> =>
+  apiService.get<unknown>(`${tenantBase(userId)}/api-keys`);
 
-export const createAdminClientApiKey = (userId: string, body: CreateAdminApiKeyBody): Promise<unknown> =>
-  apiService.post<unknown>(`${clientBase(userId)}/api-keys`, body);
+export const createAdminTenantApiKey = (userId: string, body: CreateAdminApiKeyBody): Promise<unknown> =>
+  apiService.post<unknown>(`${tenantBase(userId)}/api-keys`, body);
 
-export const revokeAdminClientApiKey = (userId: string, keyId: string): Promise<unknown> =>
-  apiService.post<unknown>(`${clientBase(userId)}/api-keys/${encodeURIComponent(keyId)}/revoke`, {});
+export const revokeAdminTenantApiKey = (userId: string, keyId: string): Promise<unknown> =>
+  apiService.post<unknown>(`${tenantBase(userId)}/api-keys/${encodeURIComponent(keyId)}/revoke`, {});
