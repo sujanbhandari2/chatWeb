@@ -87,6 +87,161 @@ export function TenantsConsole(): JSX.Element {
     }
   }, [keysTenant, keyForm]);
 
+  if (keysTenant) {
+    return (
+      <div className="va-admin-panel" style={{ maxWidth: '56rem' }}>
+        <div className="va-admin-toolbar" style={{ marginBottom: '0.75rem' }}>
+          <button
+            type="button"
+            className="va-admin-btn"
+            onClick={() => {
+              setKeysTenant(null);
+              setSecretText(null);
+            }}
+          >
+            ← Back
+          </button>
+        </div>
+
+        <h2 style={{ marginBottom: '0.25rem' }}>API keys</h2>
+        <p className="va-admin-muted" style={{ marginBottom: '1rem' }}>
+          Tenant <strong>{keysTenant.name}</strong> · <code>{keysTenant.id}</code>
+        </p>
+        <p className="va-admin-muted" style={{ marginBottom: '1rem' }}>
+          Use <code>X-Api-Key: accessKey:secretKey</code> on chat routes. The secret is shown only once when a key is
+          created.
+        </p>
+
+        {secretText !== null && (
+          <div style={{ marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>Save this credential</h3>
+            <p className="va-admin-muted">It will not be shown again. Format for <code>X-Api-Key</code> header:</p>
+            <textarea className="va-admin-secret-box" readOnly value={secretText} rows={4} />
+            <div className="va-admin-toolbar" style={{ marginBottom: 0 }}>
+              <button
+                type="button"
+                className="va-admin-btn"
+                onClick={() => {
+                  void navigator.clipboard.writeText(secretText);
+                }}
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                className="va-admin-btn va-admin-btn--primary"
+                onClick={() => setSecretText(null)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        <form
+          onSubmit={keyForm.handleSubmit(async (values) => {
+            try {
+              const body: { name?: string; expiresAt?: string } = {};
+              if (values.name?.trim()) {
+                body.name = values.name.trim();
+              }
+              if (values.expiresAt?.trim()) {
+                body.expiresAt = values.expiresAt.trim();
+              }
+              const result = await createKey.mutateAsync({ tenantId: keysTenant.id, body });
+              setSecretText(formatNewApiKeyCredential(result));
+              keyForm.reset({ name: '', expiresAt: '' });
+            } catch {
+              /* mutation.isError below */
+            }
+          })}
+          style={{ marginBottom: '1rem' }}
+        >
+          <div className="va-admin-field">
+            <label htmlFor="va-nk-name">Key name (optional)</label>
+            <input id="va-nk-name" {...keyForm.register('name')} />
+          </div>
+          <div className="va-admin-field">
+            <label htmlFor="va-nk-exp">Expires at ISO (optional)</label>
+            <input id="va-nk-exp" {...keyForm.register('expiresAt')} placeholder="2030-01-01T00:00:00.000Z" />
+          </div>
+          <button type="submit" className="va-admin-btn va-admin-btn--primary" disabled={createKey.isPending}>
+            {createKey.isPending ? 'Creating…' : 'Create key'}
+          </button>
+          {createKey.isError && (
+            <p className="error-banner" style={{ marginTop: 8 }}>
+              {createKey.error instanceof Error ? createKey.error.message : 'Create key failed'}
+            </p>
+          )}
+        </form>
+
+        {keysQuery.isLoading && <p className="va-admin-muted">Loading keys…</p>}
+        {keysQuery.data && keysQuery.data.length === 0 && !keysQuery.isLoading && (
+          <p className="va-admin-muted">No keys yet.</p>
+        )}
+        {keysQuery.data && keysQuery.data.length > 0 && (
+          <div className="va-admin-table-wrap">
+            <table className="va-admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Access key</th>
+                  <th>Secret key</th>
+                  <th>Scopes</th>
+                  <th>Expires</th>
+                  <th>Created</th>
+                  <th>Revoked</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {keysQuery.data.map((k) => (
+                  <tr key={k.id}>
+                    <td>
+                      {k.name ?? '—'}
+                    </td>
+                    <td>
+                      <code className="va-admin-muted">{k.accessKey ?? '—'}</code>
+                    </td>
+                    <td>
+                      <code className="va-admin-muted">{k.secretKey ?? '—'}</code>
+                    </td>
+                    <td>
+                      <code className="va-admin-muted">{k.scopes?.join(', ') ?? '—'}</code>
+                    </td>
+                    <td>
+                      <code className="va-admin-muted">{k.expiresAt ?? '—'}</code>
+                    </td>
+                    <td>
+                      <code className="va-admin-muted">{k.createdAt ?? '—'}</code>
+                    </td>
+                    <td>
+                      <code className="va-admin-muted">{k.revokedAt ?? '—'}</code>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="va-admin-btn va-admin-btn--danger"
+                        disabled={revokeKey.isPending}
+                        onClick={() => {
+                          if (window.confirm('Revoke this API key?')) {
+                            void revokeKey.mutateAsync({ tenantId: keysTenant.id, keyId: k.id });
+                          }
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="va-admin-panel" style={{ maxWidth: '56rem' }}>
       <h2>Tenants</h2>
@@ -285,139 +440,6 @@ export function TenantsConsole(): JSX.Element {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {keysTenant && (
-        <div className="va-admin-modal-overlay" role="presentation" onClick={() => setKeysTenant(null)}>
-          <div
-            className="va-admin-modal"
-            style={{ maxWidth: '36rem' }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="va-keys-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="va-keys-title">API keys · {keysTenant.name}</h3>
-            <p className="va-admin-muted" style={{ marginBottom: '1rem' }}>
-              Use <code>X-Api-Key: accessKey:secretKey</code> on chat routes. The secret is shown only once when a key
-              is created.
-            </p>
-
-            <form
-              onSubmit={keyForm.handleSubmit(async (values) => {
-                try {
-                  const body: { name?: string; expiresAt?: string } = {};
-                  if (values.name?.trim()) {
-                    body.name = values.name.trim();
-                  }
-                  if (values.expiresAt?.trim()) {
-                    body.expiresAt = values.expiresAt.trim();
-                  }
-                  const result = await createKey.mutateAsync({ tenantId: keysTenant.id, body });
-                  setSecretText(formatNewApiKeyCredential(result));
-                  keyForm.reset({ name: '', expiresAt: '' });
-                } catch {
-                  /* mutation.isError below */
-                }
-              })}
-              style={{ marginBottom: '1rem' }}
-            >
-              <div className="va-admin-field">
-                <label htmlFor="va-nk-name">Key name (optional)</label>
-                <input id="va-nk-name" {...keyForm.register('name')} />
-              </div>
-              <div className="va-admin-field">
-                <label htmlFor="va-nk-exp">Expires at ISO (optional)</label>
-                <input id="va-nk-exp" {...keyForm.register('expiresAt')} placeholder="2030-01-01T00:00:00.000Z" />
-              </div>
-              <button type="submit" className="va-admin-btn va-admin-btn--primary" disabled={createKey.isPending}>
-                {createKey.isPending ? 'Creating…' : 'Create key'}
-              </button>
-              {createKey.isError && (
-                <p className="error-banner" style={{ marginTop: 8 }}>
-                  {createKey.error instanceof Error ? createKey.error.message : 'Create key failed'}
-                </p>
-              )}
-            </form>
-
-            {keysQuery.isLoading && <p className="va-admin-muted">Loading keys…</p>}
-            {keysQuery.data && keysQuery.data.length === 0 && !keysQuery.isLoading && (
-              <p className="va-admin-muted">No keys yet.</p>
-            )}
-            {keysQuery.data && keysQuery.data.length > 0 && (
-              <div className="va-admin-table-wrap" style={{ marginBottom: '1rem' }}>
-                <table className="va-admin-table">
-                  <thead>
-                    <tr>
-                      <th>Name / id</th>
-                      <th>Access key</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {keysQuery.data.map((k) => (
-                      <tr key={k.id}>
-                        <td>
-                          {k.name ?? '—'}
-                          <div>
-                            <code className="va-admin-muted">{k.id}</code>
-                          </div>
-                        </td>
-                        <td>
-                          <code className="va-admin-muted">{k.accessKey ?? '—'}</code>
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="va-admin-btn va-admin-btn--danger"
-                            disabled={revokeKey.isPending}
-                            onClick={() => {
-                              if (window.confirm('Revoke this API key?')) {
-                                void revokeKey.mutateAsync({ tenantId: keysTenant.id, keyId: k.id });
-                              }
-                            }}
-                          >
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className="va-admin-modal-actions">
-              <button type="button" className="va-admin-btn" onClick={() => setKeysTenant(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {secretText !== null && (
-        <div className="va-admin-modal-overlay" role="presentation" onClick={() => setSecretText(null)}>
-          <div className="va-admin-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <h3>Save this credential</h3>
-            <p className="va-admin-muted">It will not be shown again. Format for <code>X-Api-Key</code> header:</p>
-            <textarea className="va-admin-secret-box" readOnly value={secretText} rows={4} />
-            <button
-              type="button"
-              className="va-admin-btn"
-              onClick={() => {
-                void navigator.clipboard.writeText(secretText);
-              }}
-            >
-              Copy
-            </button>
-            <div className="va-admin-modal-actions">
-              <button type="button" className="va-admin-btn va-admin-btn--primary" onClick={() => setSecretText(null)}>
-                Done
-              </button>
-            </div>
           </div>
         </div>
       )}

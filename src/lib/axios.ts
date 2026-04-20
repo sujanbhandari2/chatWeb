@@ -24,6 +24,7 @@ apiAxios.interceptors.request.use((config) => {
 
   const url = config.url ?? '';
   const method = (config.method ?? 'get').toLowerCase();
+  const isChat = isVitafyChatPath(url);
   const isPublicAuthPost =
     (url.includes('/v1/admin/login') || url.includes('/v1/auth/tenant/login')) && method === 'post';
 
@@ -36,6 +37,9 @@ apiAxios.interceptors.request.use((config) => {
     } else {
       delete config.headers.Authorization;
     }
+  } else if (isChat) {
+    // Chat routes authenticate with X-Api-Key (and optionally Socket.IO auth), not tenant JWT.
+    delete config.headers.Authorization;
   } else {
     const tenantToken = useAuthStore.getState().token;
     if (tenantToken) {
@@ -46,7 +50,7 @@ apiAxios.interceptors.request.use((config) => {
   }
 
   const chatKey = getChatApiKey();
-  if (chatKey && isVitafyChatPath(config.url)) {
+  if (chatKey && isChat) {
     config.headers['X-Api-Key'] = chatKey;
   }
   return config;

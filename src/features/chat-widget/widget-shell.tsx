@@ -1,7 +1,12 @@
+import { zodResolver } from '@hookform/resolvers/zod';
 import type { ReactNode } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { registerOrGetChatUser } from '../../api/chat-users.api';
 import type { WidgetInitConfig } from '../../schemas/widget.schemas';
+import { useAuthStore } from '../../store/useAuthStore';
+import type { AuthUser } from '../../types/chat';
 import { WidgetChat } from './ChatWidget';
-import { AuthForm } from '../auth/AuthForm';
 
 /** Wraps panel body content in the floating widget (launcher + panel). */
 export function wrapWidgetContent(
@@ -33,27 +38,90 @@ export type WidgetUnauthenticatedContentProps = {
   widgetMissingTenant: boolean;
 };
 
+const widgetCreateUserSchema = z.object({
+  providerId: z.string().trim().min(1, 'Provider id is required').max(64),
+  providerUserId: z.string().trim().min(1, 'Provider user id is required').max(128),
+  email: z.string().trim().email('Valid email required'),
+  name: z.string().trim().max(120).optional()
+});
+
+type WidgetCreateUserFormValues = z.infer<typeof widgetCreateUserSchema>;
+
+function buildAuthUserFromChatUser(row: {
+  id: string;
+  tenantId: string;
+  email: string;
+  name: string | null;
+  status: string;
+}): AuthUser {
+  return {
+    id: row.id,
+    name: row.name ?? row.email,
+    email: row.email,
+    tenantId: row.tenantId,
+    status: row.status
+  };
+}
+
 /** Login/register placeholder when the user is not signed in. */
 export function WidgetUnauthenticatedContent({
   config,
   widgetMissingTenant
 }: WidgetUnauthenticatedContentProps): JSX.Element {
+  const setSession = useAuthStore((s) => s.setSession);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting }
+  } = useForm<WidgetCreateUserFormValues>({
+    resolver: zodResolver(widgetCreateUserSchema),
+    defaultValues: {
+      providerId: 'ktmdpc',
+      providerUserId: '',
+      email: '',
+      name: ''
+    }
+  });
+
+  void widgetMissingTenant;
+
   return (
     <div className="auth-shell auth-shell--widget">
       <div className="auth-card">
         <h1>Vitafy Chat</h1>
         <p className="auth-subtitle">
-          Sign in with tenant <strong>email</strong> and <strong>password</strong> (<code>POST /api/v1/auth/tenant/login</code>).
-          Chat uses your tenant JWT plus the configured <code>X-Api-Key</code> for realtime and REST.
+          Create a chat user
         </p>
 
-        {widgetMissingTenant && (
-          <p className="error-banner">
-            Missing <code>tenantId</code> for embed routing. Set a default in <code>src/config/widget.config.ts</code> or
-            pass <code>tenantId</code> on the widget URL. API and socket URLs come from the build profile only.
-          </p>
-        )}
-        <AuthForm widgetMode={true} widgetConfig={config} widgetMissingTenant={widgetMissingTenant} />
+        <form
+          className="auth-form"
+          onSubmit={handleSubmit(async (values) => {
+            const chatUser = await registerOrGetChatUser({
+              providerId: values.providerId.trim(),
+              providerUserId: values.providerUserId.trim(),
+              email: values.email.trim(),
+              name: values.name?.trim() || undefined
+            });
+            // Token is used as a session flag in the widget; chat routes use X-Api-Key instead of tenant JWT.
+            setSession('chat-api-key', buildAuthUserFromChatUser(chatUser));
+          })}
+        >
+          <input {...register('providerId')} placeholder="Provider id" />
+          {errors.providerId && <p className="error-banner">{errors.providerId.message}</p>}
+
+          <input {...register('providerUserId')} placeholder="Provider user id" />
+          {errors.providerUserId && <p className="error-banner">{errors.providerUserId.message}</p>}
+
+          <input {...register('email')} placeholder="Email" type="email" required />
+          {errors.email && <p className="error-banner">{errors.email.message}</p>}
+
+          <input {...register('name')} placeholder="Name" />
+          {errors.name && <p className="error-banner">{errors.name.message}</p>}
+
+          <button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Creating…' : 'Create user'}
+          </button>
+        </form>
       </div>
     </div>
   );

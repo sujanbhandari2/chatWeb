@@ -30,6 +30,7 @@ export type AdminApiKeyRow = {
   id: string;
   name?: string | null;
   accessKey?: string | null;
+  secretKey?: string | null;
   scopes?: string[];
   expiresAt?: string | null;
   createdAt?: string;

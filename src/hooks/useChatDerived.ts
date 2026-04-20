@@ -54,9 +54,10 @@ export function useSortedTenantPeers(): TenantUser[] {
   const tenantUsers = useChatStore((s) => s.tenantUsers);
   const userId = useAuthStore((s) => s.user?.id);
   return useMemo(() => {
+    const selfId = (userId ?? '').trim();
     const byId = new Map<string, TenantUser>();
     for (const tenantUser of tenantUsers) {
-      if (tenantUser.id === userId) {
+      if (selfId && String(tenantUser.id).trim() === selfId) {
         continue;
       }
       if (!byId.has(tenantUser.id)) {
