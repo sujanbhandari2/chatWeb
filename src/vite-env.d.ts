@@ -18,7 +18,7 @@ declare global {
   interface Window {
     /**
      * Optional embed overrides before the widget bundle loads.
-     * Applied: **layout / interaction**, and **`backend.tenantId` / `lockTenant` / `hideTenantField` / `tenantJwt`**.
+     * Applied: **layout / interaction**, and **`backend.tenantId` / `lockTenant` / `hideTenantField` / `tenantJwt`** (optional; not used for Socket.IO).
      * Ignored from here: `backend.apiUrl`, `socketUrl`, timeouts, plus `uiElements`, `colors`, `typography`, `a11y`,
      * `features`, `app`, `zIndex`, `debug` (use `src/config/widget.config.ts`).
      */

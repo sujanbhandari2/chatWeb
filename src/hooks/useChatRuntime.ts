@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { DeliveredReceipt, Message, ReadReceipt } from '../types/chat';
 import { WidgetPanelType } from '../types/chat';
 import { useChatSocket } from './useChatSocket';
@@ -11,8 +11,7 @@ import { useChatSelectors } from './useChatSelectors';
 import { selectRuntimeSubscriptionSlice } from '../store/chat/chat-selectors';
 import { useChatStore } from '../store/useChatStore';
 import type { WidgetInitConfig } from '../schemas/widget.schemas';
-import type { ChatRuntimeValue } from '../types/chat-runtime.types';
-import { isLikelyJwt } from '../utils/chat.utils';
+import type { ChatRuntimeValue, WidgetSocketConnection } from '../types/chat-runtime.types';
 
 type SocketAck<T> = { ok: boolean; data?: T; error?: string };
 
@@ -48,23 +47,62 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     conversations,
   } = useChatSelectors(selectRuntimeSubscriptionSlice);
 
-  const tenantJwtForSocket = useMemo(() => {
-    if (isLikelyJwt(token)) {
-      return token;
-    }
-    const fromProfile = widgetConfig.backend?.tenantJwt?.trim();
-    return fromProfile && isLikelyJwt(fromProfile) ? fromProfile : '';
-  }, [token, widgetConfig.backend?.tenantJwt]);
+  /** Keep Socket.IO up for inbox + thread: presence and inbound messages still apply when no chat is open. */
+  const socketEnabled = Boolean(user?.id);
 
-  const socketEnabled = Boolean(
-    tenantJwtForSocket && user?.id && selectedConversationId && selectedConversationId.trim() !== ''
-  );
+  const socket = useChatSocket(user?.id, socketEnabled);
 
-  const socket = useChatSocket(tenantJwtForSocket || undefined, user?.id, socketEnabled);
+  const [socketConnection, setSocketConnection] = useState<WidgetSocketConnection>({ status: 'inactive' });
 
   useEffect(() => {
     setChatSocketInstance(socket ?? null);
     return () => setChatSocketInstance(null);
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) {
+      setSocketConnection({ status: 'inactive' });
+      return undefined;
+    }
+
+    const applyConnected = (): void => {
+      setSocketConnection({ status: 'connected' });
+    };
+
+    const onConnect = (): void => {
+      applyConnected();
+    };
+
+    const onDisconnect = (reason: string): void => {
+      if (socket.active) {
+        setSocketConnection({ status: 'reconnecting', detail: reason });
+      } else {
+        setSocketConnection({ status: 'disconnected', detail: reason });
+      }
+    };
+
+    const onConnectError = (err: unknown): void => {
+      const message = err instanceof Error ? err.message : String(err);
+      setSocketConnection({ status: 'error', detail: message });
+    };
+
+    const onReconnectAttempt = (): void => {
+      setSocketConnection((prev) => ({ status: 'reconnecting', detail: prev.detail }));
+    };
+
+    setSocketConnection(socket.connected ? { status: 'connected' } : { status: 'connecting' });
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
+    socket.io.on('reconnect_attempt', onReconnectAttempt);
+
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
+      socket.io.off('reconnect_attempt', onReconnectAttempt);
+    };
   }, [socket]);
 
   useEffect(() => {
@@ -572,6 +610,7 @@ export function useChatRuntime(widgetConfig: WidgetInitConfig): ChatRuntimeValue
     editGroupFormId,
     startRecording,
     finishRecording,
-    cancelRecording
+    cancelRecording,
+    socketConnection
   };
 }

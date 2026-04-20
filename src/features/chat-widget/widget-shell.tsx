@@ -93,9 +93,8 @@ export function WidgetUnauthenticatedContent({
           Create a chat user
         </p>
         <p className="auth-subtitle" style={{ fontSize: '0.85rem' }}>
-          Realtime (Socket.IO) needs a tenant JWT in <code>handshake.auth.token</code>. If your session token is not a
-          JWT, set <code>backend.tenantJwt</code> in the trusted widget init config (e.g. your dev profile in{' '}
-          <code>widget.config.ts</code>).
+          Realtime uses your widget access key (<code>VITE_WIDGET_ACCESS_KEY</code>) and your chat user id — no tenant
+          JWT on the socket.
         </p>
 
         <form

@@ -1,5 +1,20 @@
 import type { RefObject } from 'react';
 
+/** Socket.IO lifecycle for the embed widget status strip. */
+export type WidgetSocketConnectionStatus =
+  | 'inactive'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnected'
+  | 'error';
+
+export type WidgetSocketConnection = {
+  status: WidgetSocketConnectionStatus;
+  /** Last disconnect reason or connect_error message (for `title` / debugging). */
+  detail?: string;
+};
+
 /** Refs and recording controls shared by chat UI (sidebar, thread, group forms). */
 export type ChatRuntimeValue = {
   messageScrollerRef: RefObject<HTMLElement | null>;
@@ -11,4 +26,5 @@ export type ChatRuntimeValue = {
   startRecording: () => Promise<void>;
   finishRecording: () => void;
   cancelRecording: () => void;
+  socketConnection: WidgetSocketConnection;
 };

@@ -2,6 +2,7 @@ import { WidgetInitConfigProvider } from '../../contexts/config-provider';
 import { ChatRuntimeProvider } from '../../hooks/ChatRuntimeContext';
 import { WidgetPanelType } from '../../types/chat';
 import type { WidgetAuthenticatedLayoutProps } from '../../types/widget-app.types';
+import { WidgetSocketStatusBar } from './WidgetSocketStatusBar';
 import { wrapWidgetContent } from './widget-shell';
 
 export function WidgetAuthenticatedLayout({
@@ -23,6 +24,7 @@ export function WidgetAuthenticatedLayout({
             overlayVisible ? ' chat-app-shell--widget-chat' : ''
           }`}
         >
+          <WidgetSocketStatusBar />
           <aside
             className="left-rail left-rail--widget-full"
             aria-hidden={Boolean(selectedConversationId && currentPanel === WidgetPanelType.CHATS)}

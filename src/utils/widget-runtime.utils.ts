@@ -6,8 +6,7 @@
  * **Merge order** (each step overrides the previous): `getWidgetProfilePartial()` from
  * `config/widget.config.ts` → `window.__HEALTHCHAT_WIDGET_CONFIG__` → URL search params
  * (`parseWidgetConfigFromSearchParams`). **Embedders may set on `backend`:** `tenantId`,
- * `lockTenant`, `hideTenantField`, and optional **`tenantJwt`** (Socket.IO `handshake.auth.token`
- * when the UI session token is not a JWT). **API URLs, sockets, timeouts, and other `backend` keys**
+ * `lockTenant`, `hideTenantField`, and optional **`tenantJwt`** (reserved / non-socket use). **API URLs, sockets, timeouts, and other `backend` keys**
  * come only from your built profile. **Branding / typography / a11y /
  * styling (e.g. `classPrefix`), `features`, and `app`** from window/URL are stripped. **Colors** from the URL are ignored in **production**; in **dev**,
  * `?__hc_cfg_preview=1` with `primaryColor`, `secondaryColor`, … (see `buildWidgetIframeSrc` option
@@ -431,7 +430,7 @@ const CLIENT_VENDOR_TOP_KEYS = [
   'debug'
 ] as const satisfies readonly (keyof DeepPartialWidgetConfig)[];
 
-/** From window/URL `backend`, keep tenant-facing fields (+ optional `tenantJwt`); API sockets/timeouts stay profile-only. */
+/** From window/URL `backend`, keep tenant-facing fields (+ optional `tenantJwt`); API sockets/timeouts stay profile-only. Realtime auth is `VITE_WIDGET_ACCESS_KEY` only. */
 function sanitizeEmbedderBackendPartial(
   backend: unknown
 ): DeepPartialWidgetConfig['backend'] | undefined {

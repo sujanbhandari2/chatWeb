@@ -1940,16 +1940,70 @@ label.composer-icon-btn {
 .chat-app-shell--widget {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
+  grid-template-rows: auto 1fr;
   height: 100%;
   min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
+.widget-socket-status-bar {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #475569;
+  background: linear-gradient(to bottom, #f1f5f9, #e8eef5);
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.widget-socket-status-bar__dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.widget-socket-status-bar__dot--inactive {
+  background: #94a3b8;
+}
+
+.widget-socket-status-bar__dot--pending {
+  background: #ca8a04;
+  box-shadow: 0 0 0 2px rgba(202, 138, 4, 0.25);
+}
+
+.widget-socket-status-bar__dot--live {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.22);
+}
+
+.widget-socket-status-bar__dot--off {
+  background: #64748b;
+}
+
+.widget-socket-status-bar__dot--error {
+  background: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.22);
+}
+
+.widget-socket-status-bar__label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .chat-app-shell--widget > .left-rail,
 .chat-app-shell--widget > .chat-stage {
-  grid-area: 1 / 1;
+  grid-column: 1;
+  grid-row: 2;
   min-height: 0;
   min-width: 0;
 }
