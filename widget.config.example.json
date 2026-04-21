@@ -1,0 +1,41 @@
+{
+  "$schemaNote": "API URL, socket URL, timeouts, tenant routing, features, and app versioning are fixed in your hosted build (src/config/widget.config.ts). This file is embedder-facing layout/branding only (not features/app). Full merged shape: docs/CHAT_WIDGET.md; minimal sample: widget.config.full.example.json. Optional tenantId via widget URL — src/utils/widget-runtime.utils.ts.",
+  "launcher": {
+    "position": "right",
+    "size": 56,
+    "ariaLabel": "Open chat",
+    "iconUrl": ""
+  },
+  "spacing": {
+    "offsetBottom": 24,
+    "offsetSide": 24,
+    "launcherSize": 56,
+    "panelWidth": 400,
+    "panelHeight": 560,
+    "panelMaxWidth": "min(100vw - 32px, 96vw)",
+    "panelMaxHeight": "min(100vh - 32px, 92vh)",
+    "panelBorderRadius": "16px",
+    "panelBoxShadow": "0 12px 40px rgba(15, 23, 42, 0.18)"
+  },
+  "interactions": {
+    "defaultOpen": true,
+    "closeOnEscape": true,
+    "closeOnClickOutside": true
+  },
+  "uiElements": {
+    "panelTitle": ""
+  },
+  "typography": {
+    "fontFamily": "Inter, sans-serif",
+    "fontSize": { "base": 16 },
+    "fontWeight": { "normal": 400 },
+    "lineHeight": 1.5,
+    "letterSpacing": 0
+  },
+  "colors": {
+    "primary": "#2563eb",
+    "secondary": "#64748b",
+    "text": { "primary": "#000000" }
+  },
+  "zIndex": 99999
+}

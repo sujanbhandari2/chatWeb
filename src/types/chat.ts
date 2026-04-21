@@ -1,42 +1,58 @@
-export type Role = 'CLIENT' | 'AGENT' | 'ADMIN';
-export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE';
+/** Prisma conversation type enum — extend as backend adds values */
+export type ConversationType = string;
 
+export type MessageType = 'TEXT' | 'IMAGE' | 'VOICE' | 'VIDEO' | 'FILE' | 'LINK' | 'OTHER';
+
+/** User returned from POST /api/auth/create */
 export interface AuthUser {
   id: string;
+  name: string | null;
+  email: string;
   tenantId: string;
-  role: Role;
-  username: string;
+  status: string | null;
 }
 
-export interface LoginResponse {
+export interface CreateAccountResponse {
   token: string;
   user: AuthUser;
+}
+
+/** @deprecated Use CreateAccountResponse; kept for gradual migration */
+export type LoginResponse = CreateAccountResponse;
+
+export interface PublicUser {
+  id: string;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+  status: string | null;
 }
 
 export interface TenantUser {
   id: string;
   tenantId: string;
-  username: string;
-  role: Role;
-  isOnline: boolean;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+  status: string | null;
   createdAt: string;
+  isOnline: boolean;
 }
 
 export interface ConversationParticipant {
-  id: string;
   userId: string;
-  user: {
-    id: string;
-    username: string;
-    role: Role;
-  };
+  conversationId: string;
+  user: PublicUser;
 }
 
 export interface Conversation {
   id: string;
   tenantId: string;
-  isGlobal: boolean;
+  type: ConversationType;
+  title: string | null;
+  createdBy: string | null;
   createdAt: string;
+  updatedAt: string;
   participants: ConversationParticipant[];
 }
 
@@ -44,7 +60,16 @@ export interface MessageReaction {
   id: string;
   messageId: string;
   userId: string;
-  reactionType: string;
+  emoji: string;
+  createdAt: string;
+  user: PublicUser;
+}
+
+export interface ReplyToMessage {
+  id: string;
+  senderId: string;
+  content: string;
+  messageType: MessageType;
 }
 
 export interface ReadReceipt {
@@ -64,13 +89,60 @@ export interface DeliveredReceipt {
 export interface Message {
   id: string;
   conversationId: string;
-  tenantId: string;
   senderId: string;
-  type: MessageType;
   content: string;
-  deletedAt: string | null;
+  messageType: MessageType;
+  replyToMessageId: string | null;
   createdAt: string;
+  attachments: unknown[];
+  replyToMessage?: ReplyToMessage | null;
   reactions: MessageReaction[];
-  deliveredReceipts: DeliveredReceipt[];
-  readReceipts: ReadReceipt[];
+  /** Legacy / socket — not always present on REST payloads */
+  tenantId?: string;
+  type?: MessageType;
+  deletedAt?: string | null;
+  /** From Vitafy `POST .../messages/:id/transcribe` and list/create payloads */
+  transcribedMessage?: string | null;
+  /** From Vitafy `POST .../messages/:id/translate` and list/create payloads */
+  translatedMessage?: string | null;
+  deliveredReceipts?: DeliveredReceipt[];
+  readReceipts?: ReadReceipt[];
+}
+
+export interface MessagesPage {
+  data: Message[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+/** Result after `POST /api/upload` + successful `PUT` to `uploadUrl` (`api_doc.md`). */
+export interface UploadFileResult {
+  fileUrl: string;
+  key: string;
+  mimeType: string;
+  byteSize: number;
+}
+
+export interface TranscribeResponse {
+  data: {
+    text: string;
+    fromCache: boolean;
+  };
+}
+
+export interface TranslateResponse {
+  data: {
+    translatedText: string;
+  };
+}
+
+export enum WidgetPanelType {
+  CHATS = 'chats',
+  PEOPLE = 'people',
+  NEW_GROUP = 'new-group',
+  EDIT_GROUP = 'edit-group',
 }
