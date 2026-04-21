@@ -1,9 +1,11 @@
 import type { LegacyRef } from 'react';
+import { MdGTranslate } from 'react-icons/md';
 import { useChatStore } from '../../../store/useChatStore';
 import { toAbsoluteMediaUrl } from '../../../utils/media.utils';
 import {
   getMessagePrimaryMediaUrl,
   getMessageType,
+  inferUploadMessageType,
   isGlobalConversation,
   isGroupConversation,
   summarizeReactions,
@@ -162,6 +164,14 @@ export function ChatThreadView(): JSX.Element {
                 (isGroupConversation(selectedConversation) || isGlobalConversation(selectedConversation));
               const menuOpen = messageActionsMenuId === message.id;
               const speechUi = messageSpeechUi[message.id];
+              const messageType = getMessageType(message);
+              const showTranslateFooter =
+                features.translateMessages &&
+                !message.deletedAt &&
+                ((messageType !== 'IMAGE' &&
+                  messageType !== 'VOICE' &&
+                  (Boolean(message.content?.trim()) || Boolean(speechUi?.translated))) ||
+                  (messageType === 'VOICE' && Boolean(speechUi?.transcript)));
 
               return (
                 <div key={message.id} className={`message-row-outer ${isMine ? 'mine' : 'theirs'}`}>
@@ -261,6 +271,24 @@ export function ChatThreadView(): JSX.Element {
                           <em className="deleted">Message deleted</em>
                         ) : getMessageType(message) === 'IMAGE' ? (
                           <img src={toAbsoluteMediaUrl(getMessagePrimaryMediaUrl(message))} alt="Uploaded" />
+                        ) : getMessageType(message) === 'VIDEO' ? (
+                          <video
+                            controls
+                            playsInline
+                            src={toAbsoluteMediaUrl(getMessagePrimaryMediaUrl(message))}
+                            className="message-bubble-video"
+                          />
+                        ) : getMessageType(message) === 'FILE' ? (
+                          <p className="message-bubble-file">
+                            <a
+                              href={toAbsoluteMediaUrl(getMessagePrimaryMediaUrl(message))}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                            >
+                              {message.content?.trim() ? message.content : 'Download file'}
+                            </a>
+                          </p>
                         ) : getMessageType(message) === 'VOICE' ? (
                           <>
                             {!speechUi?.translated && (
@@ -291,43 +319,11 @@ export function ChatThreadView(): JSX.Element {
                                     {!speechUi.translated && (
                                       <p className="message-msgr-transcript">{speechUi.transcript}</p>
                                     )}
-                                    {features.translateMessages &&
-                                      (speechUi.translated ? (
-                                        <>
-                                          <p className="message-msgr-translation-body" aria-live="polite">
-                                            {speechUi.translated}
-                                          </p>
-                                          <button
-                                            type="button"
-                                            className="message-msgr-link"
-                                            onClick={() =>
-                                              patchMessageSpeechUi(message.id, {
-                                                translated: undefined,
-                                                error: undefined
-                                              })
-                                            }
-                                          >
-                                            See original
-                                          </button>
-                                        </>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          className="message-msgr-link"
-                                          disabled={speechUi.loading === 'translate'}
-                                          onClick={() =>
-                                            void handleTranslateForMessage(
-                                              message,
-                                              speechUi.transcript ?? '',
-                                              'en'
-                                            )
-                                          }
-                                        >
-                                          {speechUi.loading === 'translate'
-                                            ? 'Translating…'
-                                            : 'Translate'}
-                                        </button>
-                                      ))}
+                                    {features.translateMessages && speechUi.translated && (
+                                      <p className="message-msgr-translation-body" aria-live="polite">
+                                        {speechUi.translated}
+                                      </p>
+                                    )}
                                     {speechUi.error && speechUi.transcript && !speechUi.translated ? (
                                       <p className="message-msgr-error" role="alert">
                                         {speechUi.error}
@@ -341,57 +337,77 @@ export function ChatThreadView(): JSX.Element {
                         ) : (
                           <>
                             {!speechUi?.translated && <p>{message.content}</p>}
-                            {features.translateMessages && (
-                              <div className="message-msgr-translation">
-                                {speechUi?.translated ? (
-                                  <>
-                                    <p className="message-msgr-translation-body" aria-live="polite">
-                                      {speechUi.translated}
-                                    </p>
-                                    <button
-                                      type="button"
-                                      className="message-msgr-link"
-                                      onClick={() =>
-                                        patchMessageSpeechUi(message.id, {
-                                          translated: undefined,
-                                          error: undefined
-                                        })
-                                      }
-                                    >
-                                      See original
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="message-msgr-link"
-                                      disabled={speechUi?.loading === 'translate'}
-                                      onClick={() =>
-                                        void handleTranslateForMessage(message, message.content, 'en')
-                                      }
-                                    >
-                                      {speechUi?.loading === 'translate'
-                                        ? 'Translating…'
-                                        : 'Translate'}
-                                    </button>
-                                    {speechUi?.error ? (
-                                      <p className="message-msgr-error" role="alert">
-                                        {speechUi.error}
-                                      </p>
-                                    ) : null}
-                                  </>
-                                )}
-                              </div>
+                            {features.translateMessages && speechUi?.translated && (
+                              <p className="message-msgr-translation-body" aria-live="polite">
+                                {speechUi.translated}
+                              </p>
                             )}
+                            {features.translateMessages && speechUi?.error && !speechUi.translated ? (
+                              <p className="message-msgr-error" role="alert">
+                                {speechUi.error}
+                              </p>
+                            ) : null}
                           </>
                         )}
 
                         <div className="message-info">
-                          <span>{new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
-                          {status && (
-                            <span className={`message-status ${status}`} aria-label={`Message ${status}`}>
-                              {status === 'sent' ? '✓' : '✓✓'}
+                          <span className="message-info-lead">
+                            <span>
+                              {new Date(message.createdAt).toLocaleTimeString([], {
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            {status && (
+                              <span className={`message-status ${status}`} aria-label={`Message ${status}`}>
+                                {status === 'sent' ? '✓' : '✓✓'}
+                              </span>
+                            )}
+                          </span>
+                          {showTranslateFooter && (
+                            <span className="message-info-translate">
+                              {speechUi?.translated ? (
+                                <button
+                                  type="button"
+                                  className="message-msgr-link message-info-translate-btn"
+                                  onClick={() =>
+                                    patchMessageSpeechUi(message.id, {
+                                      translated: undefined,
+                                      error: undefined
+                                    })
+                                  }
+                                >
+                                  See original
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="message-info-translate-icon-btn"
+                                  title="Translate to English"
+                                  aria-label={
+                                    speechUi?.loading === 'translate'
+                                      ? 'Translating…'
+                                      : 'Translate to English'
+                                  }
+                                  aria-busy={speechUi?.loading === 'translate'}
+                                  disabled={speechUi?.loading === 'translate'}
+                                  onClick={() =>
+                                    void handleTranslateForMessage(
+                                      message,
+                                      messageType === 'VOICE'
+                                        ? (speechUi?.transcript ?? '')
+                                        : message.content,
+                                      'en'
+                                    )
+                                  }
+                                >
+                                  {speechUi?.loading === 'translate' ? (
+                                    <span className="message-info-translate-spinner" aria-hidden />
+                                  ) : (
+                                    <MdGTranslate className="message-info-translate-svg" size={14} aria-hidden />
+                                  )}
+                                </button>
+                              )}
                             </span>
                           )}
                         </div>
@@ -473,16 +489,18 @@ export function ChatThreadView(): JSX.Element {
                 }
               >
                 {features.imageUpload && (
-                  <label className="composer-icon-btn" title="Attach image">
+                  <label className="composer-icon-btn" title="Attach photo, video, or file">
                     <IconImage />
-                    <span className="visually-hidden">Attach image</span>
+                    <span className="visually-hidden">Attach photo, video, or file</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       onChange={(event) => {
                         const file = event.target.files?.[0];
                         if (file) {
-                          void useChatStore.getState().handleSendUploadedMessage(file, 'IMAGE');
+                          void useChatStore
+                            .getState()
+                            .handleSendUploadedMessage(file, inferUploadMessageType(file));
                         }
                         event.target.value = '';
                       }}

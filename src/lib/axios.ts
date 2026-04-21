@@ -15,6 +15,14 @@ function isVitafyChatPath(url: string | undefined): boolean {
   return url.includes('/v1/chat/');
 }
 
+/** Presigned tenant uploads (`api_doc.md` — `POST /api/upload`, same `X-Api-Key` as chat). */
+function isVitafyPresignedUploadPath(url: string | undefined): boolean {
+  if (!url) {
+    return false;
+  }
+  return url.includes('/upload');
+}
+
 apiAxios.interceptors.request.use((config) => {
   config.baseURL = getApiBaseUrl();
   const timeoutMs = getResolvedApiTimeoutMs();
@@ -25,6 +33,8 @@ apiAxios.interceptors.request.use((config) => {
   const url = config.url ?? '';
   const method = (config.method ?? 'get').toLowerCase();
   const isChat = isVitafyChatPath(url);
+  const isPresignedUpload = isVitafyPresignedUploadPath(url);
+  const chatApiKeyScope = isChat || isPresignedUpload;
   const isPublicAuthPost =
     (url.includes('/v1/admin/login') || url.includes('/v1/auth/tenant/login')) && method === 'post';
 
@@ -44,8 +54,8 @@ apiAxios.interceptors.request.use((config) => {
     } else {
       delete config.headers.Authorization;
     }
-  } else if (isChat) {
-    // Chat routes authenticate with X-Api-Key (and optionally Socket.IO auth), not tenant JWT.
+  } else if (chatApiKeyScope) {
+    // Chat + presigned upload routes use X-Api-Key, not tenant JWT.
     delete config.headers.Authorization;
   } else {
     const tenantToken = useAuthStore.getState().token;
@@ -57,7 +67,7 @@ apiAxios.interceptors.request.use((config) => {
   }
 
   const chatKey = getChatApiKey();
-  if (chatKey && isChat) {
+  if (chatKey && chatApiKeyScope) {
     config.headers['X-Api-Key'] = chatKey;
   }
   return config;
@@ -86,7 +96,7 @@ apiAxios.interceptors.response.use(
           useAdminAuthStore.getState().clearSession();
         } else if (reqUrl.includes('/v1/shared/') || reqUrl.includes('/v1/auth/')) {
           useAuthStore.getState().clearSession();
-        } else if (!reqUrl.includes('/v1/chat/')) {
+        } else if (!reqUrl.includes('/v1/chat/') && !reqUrl.includes('/upload')) {
           useAuthStore.getState().clearSession();
         }
       }

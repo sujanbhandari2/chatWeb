@@ -7,6 +7,21 @@ import type {
   TenantUser
 } from '../types/chat';
 
+/** Map a picked file to Vitafy `MessageType` for `POST .../messages`. */
+export function inferUploadMessageType(file: File): MessageType {
+  const t = file.type.toLowerCase();
+  if (t.startsWith('image/')) {
+    return 'IMAGE';
+  }
+  if (t.startsWith('video/')) {
+    return 'VIDEO';
+  }
+  if (t.startsWith('audio/')) {
+    return 'VOICE';
+  }
+  return 'FILE';
+}
+
 export type UserLabel = { name: string | null; email: string };
 
 export const userDisplayName = (user: UserLabel): string => {

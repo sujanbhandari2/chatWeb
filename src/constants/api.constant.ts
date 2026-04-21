@@ -28,7 +28,7 @@ export const API_PATHS = {
     conversationMessageTranslate: (conversationId: string, messageId: string) =>
       `/v1/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/translate`
   },
-  /** Legacy non-Vitafy uploads / speech (unchanged paths). */
+  /** Presigned S3 upload (`POST /api/upload`); version-neutral under `/api` (`api_doc.md`). */
   UPLOAD: '/upload',
   SPEECH: {
     TRANSCRIBE: '/speech/transcribe',

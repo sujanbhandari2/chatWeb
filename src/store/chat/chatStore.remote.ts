@@ -5,6 +5,7 @@ import type { FormEvent } from 'react';
 import * as conversationsApi from '../../api/conversations.api';
 import { getTenantUsers } from '../../api/users.api';
 import { uploadFileRequest } from '../../api/upload.api';
+import { getChatApiKey } from '../../utils/runtime-endpoints.utils';
 import { isGlobalConversation, isLikelyJwt, normalizeMessage } from '../../utils/chat.utils';
 import { WidgetPanelType, type Message, type MessageReaction, type MessageType } from '../../types/chat';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../../constants/session.constants';
@@ -318,33 +319,31 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       if (!token || !selectedConversationId) {
         return;
       }
+      if (!user?.id) {
+        get().setError('Missing chat user');
+        return;
+      }
+      if (!getChatApiKey()) {
+        get().setError(
+          'Chat API key is required to upload files (set VITE_WIDGET_ACCESS_KEY for presigned storage).'
+        );
+        return;
+      }
       try {
         const uploaded = await uploadFileRequest(file);
-        let message: Message;
-        if (isWidgetLikeSessionToken(token)) {
-          if (!user?.id) {
-            throw new Error('Missing chat user');
-          }
-          message = await conversationsApi.postConversationRestMessage(selectedConversationId, {
-            type,
-            senderId: user.id,
-            attachments: [
-              {
-                url: uploaded.url,
-                mimeType: file.type || undefined,
-                fileName: file.name || undefined,
-                byteSize: file.size,
-                kind: 'upload'
-              }
-            ]
-          });
-        } else {
-          message = await chatEmitWithAck<Message>('send_message', {
-            conversationId: selectedConversationId,
-            type,
-            content: uploaded.url
-          });
-        }
+        const message = await conversationsApi.postConversationRestMessage(selectedConversationId, {
+          type,
+          senderId: user.id,
+          attachments: [
+            {
+              url: uploaded.fileUrl,
+              mimeType: file.type || uploaded.mimeType || undefined,
+              fileName: file.name || undefined,
+              byteSize: uploaded.byteSize,
+              kind: 'upload'
+            }
+          ]
+        });
         get().upsertMessage(message);
         get().bumpConversationUpdatedAt(selectedConversationId, message.createdAt);
       } catch (err) {

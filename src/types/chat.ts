@@ -119,12 +119,12 @@ export interface MessagesPage {
   };
 }
 
-export interface UploadFileResponse {
-  url: string;
+/** Result after `POST /api/upload` + successful `PUT` to `uploadUrl` (`api_doc.md`). */
+export interface UploadFileResult {
+  fileUrl: string;
   key: string;
   mimeType: string;
-  mimetype: string;
-  size: number;
+  byteSize: number;
 }
 
 export interface TranscribeResponse {

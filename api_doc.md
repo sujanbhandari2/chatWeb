@@ -3,7 +3,7 @@
 Base URL defaults to `http://localhost:4040` (see `PORT` and `HOST` in `.env`). All JSON bodies use `Content-Type: application/json` unless noted.
 
 **Global HTTP prefix:** `api`  
-**URI versioning:** `v1` (Nest default version)  
+**URI versioning:** `v1` (Nest default version). Versioned routes use the segment **`/v1/`** immediately after `api` (e.g. `/api/v1/chat/...`, `/api/v1/system/health`).  
 
 Example: `GET http://localhost:4040/api/v1/system/health`
 
@@ -54,6 +54,49 @@ Same `Authorization: Bearer <jwt>` header. Obtain JWT with `POST /api/v1/auth/te
 ### Tenant scope (chat)
 
 Chat routes are scoped by the **API key’s tenant** (`request.userId` from the key row). There is no separate company header.
+
+### Presigned uploads (`/api/upload`)
+
+Same **`X-Api-Key: accessKey:secretKey`** as chat. This route is **version-neutral**: it is **`POST /api/upload`**, not under `/api/v1/…`.
+
+Use it to obtain a **presigned S3 PUT URL** and the final **`fileUrl`** (HTTPS) to pass in chat message `attachments[].url` after the browser uploads the file directly to object storage.
+
+**Configuration (server):** `AWS_BUCKET`, `AWS_REGION`, `AWS_BASE_URL` (public origin of objects, no trailing slash — must match where your bucket is served, e.g. CDN or `https://bucket.s3…amazonaws.com`), optional `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (omit on AWS if the instance uses an IAM role), optional `UPLOAD_DIR` (default `chat_test`), optional `PRESIGN_UPLOAD_EXPIRES_SECONDS` (default **900**, clamped **60–86400**).
+
+---
+
+## Upload — `POST /api/upload`
+
+**Auth:** `X-Api-Key` (tenant-scoped; object keys include the tenant id).
+
+**201** (Nest default for `POST`) — `data`:
+
+| Field | Type | Description |
+|--------|------|-------------|
+| `method` | `"PUT"` | HTTP method for the upload request |
+| `uploadUrl` | string | Presigned URL (query string contains auth; short-lived) |
+| `fileUrl` | string | Public HTTPS URL of the object after upload — use this value in **`attachments[].url`** |
+| `key` | string | Object key in the bucket |
+| `headers` | object | Headers the client **must** send on the PUT (at minimum **`Content-Type`**, must match the `mimeType` you sent when presigning) |
+| `expiresIn` | number | TTL of `uploadUrl` in seconds |
+
+**Body**
+
+| Field | Type | Rules |
+|--------|------|--------|
+| `fileName` | string | Required; path segments stripped; sanitized to a safe file segment |
+| `mimeType` | string | Optional; default `application/octet-stream`; sent as `Content-Type` on PUT |
+| `byteSize` | integer | Optional; informational only |
+| `prefix` | string | Optional; extra path segment under the tenant folder (`[a-zA-Z0-9_-]{1,64}`) |
+
+**503** — Missing `AWS_BUCKET` / `AWS_REGION`, or missing `AWS_BASE_URL`, or credentials cannot sign (misconfiguration).
+
+### Frontend flow
+
+1. `POST /api/upload` with JSON `{ "fileName": "photo.jpg", "mimeType": "image/jpeg" }` and header `X-Api-Key: accessKey:secretKey`.
+2. From `data`, take **`uploadUrl`**, **`headers`**, and **`method`** (`PUT`).
+3. **`fetch(uploadUrl, { method: 'PUT', headers: data.headers, body: fileBlob })`** — use the **File** / **Blob** as body; do not send JSON.
+4. On success, send the message with **`data.fileUrl`** in `attachments[].url` (see **POST `/api/v1/chat/conversations/:conversationId/messages`** below).
 
 ---
 
@@ -359,6 +402,9 @@ Messages are ordered **newest first** (`createdAt` desc). Soft-deleted messages 
 |--------|--------|
 | `id`, `conversationId`, `tenantId`, `senderId`, `type`, `content`, `createdAt`, `deletedAt` | `content` is plain text, caption for uploads, or a single legacy HTTPS URL. Older rows may still store a **JSON media envelope** in `content`; see `attachments` column below. |
 | `attachments` | **Optional.** Array read from PostgreSQL **`jsonb`** on `messages.attachments`. Each item: `{ "fileUrl", "size"?, "fileType"?, "fileName"?, "mimeType"?, "kind"? }` (`kind`: client hint such as `live_recording`, `camera`, `upload`). Omitted in JSON when empty. For legacy envelope-only rows (no column data), the API still returns this array derived from `content` when it parses as a v1 envelope. |
+| `replyToMessageId` | **Optional.** Numeric string when this message replies to another message in the same conversation (`messages.reply_to_message_id`). |
+| `replyTo` | **Optional.** Snapshot of the parent message when loaded: `{ id, senderId, type, content, createdAt, sender?: { id, name } }`. Omitted if the parent row is missing (e.g. cleared after parent delete). |
+| `reactions` | **Optional.** One row per chat user per message (upsert). Each item: `{ id, chatUserId, reactionType, userName }` (`userName` from `ChatUser.name`). Omitted when empty. |
 | `translatedMessage`, `transcribedMessage` | Optional strings when AI endpoints have been used (see translate/transcribe below). |
 | `sender` | `{ id, name }` when loaded |
 
@@ -378,6 +424,7 @@ REST send (also broadcasts over Socket.IO to the conversation room). Request bod
 | `type` | enum | `TEXT`, `IMAGE`, `VOICE`, `VIDEO`, `FILE`, `LINK`, `OTHER` (Prisma `MessageType`) |
 | `content` | string | Optional if `attachments` is non-empty. Max 50000 chars. Plain text, caption for media, or a **single** legacy HTTPS media URL (e.g. voice file) when not using `attachments`. **Required** (non-empty after trim) when `attachments` is omitted or empty. |
 | `attachments` | array | Optional. Up to **50** items in one request, in any order — images, videos, audio, documents, live recordings, etc. Allowed for **any** `MessageType` (often **`OTHER`** for mixed bundles). |
+| `replyToMessageId` | numeric string | Optional. Must reference an existing, non-deleted message in **this** conversation (same tenant). Stored as `messages.reply_to_message_id`. |
 
 **`attachments[]` item**
 
@@ -411,7 +458,7 @@ REST send (also broadcasts over Socket.IO to the conversation room). Request bod
 
 **201** — **serialized** message (same shape as each element in `GET .../messages` → `data.items`). When files were sent, **`attachments`** mirrors the JSONB payload (`fileUrl`, optional `size`, `fileType`, `fileName`, `mimeType`, `kind`). Request field `url` is stored as `fileUrl`; `byteSize` as `size`.
 
-**Database:** The `messages.attachments` column must exist as **`jsonb`** (nullable). Sync with `npx prisma migrate deploy` / `prisma migrate dev` after schema changes, or `npx prisma db push` in development. Without the column, creates that include `attachments` fail at runtime.
+**Database:** The `messages.attachments` column must exist as **`jsonb`** (nullable); **`messages.reply_to_message_id`** is an optional nullable FK for replies. Sync with `npx prisma migrate deploy` / `prisma migrate dev` after schema changes, or `npx prisma db push` in development. Without matching columns, creates fail at runtime.
 
 **Example — mixed bundle** (`type` often `OTHER`; up to 50 items):
 
@@ -428,7 +475,36 @@ REST send (also broadcasts over Socket.IO to the conversation room). Request bod
 }
 ```
 
-**Socket parity:** The `send_message` socket event still accepts only `{ conversationId, type, content }`. It does not populate `messages.attachments`; use REST for structured uploads, or mirror legacy JSON in `content` if you must use the socket only.
+**Socket parity:** The `send_message` socket payload is `{ conversationId, type, content, replyToMessageId? }`. Optional **`replyToMessageId`** matches REST (same validation). Socket sends do **not** populate `messages.attachments`; use REST for structured uploads, or mirror a legacy JSON envelope in `content` if you must use the socket only.
+
+### `POST /api/v1/chat/conversations/:conversationId/messages/:messageId/reactions`
+
+Upserts the calling tenant’s reaction for **`userId`** on **`messageId`**: at most **one** reaction row per `(messageId, chatUserId)`; a second POST with the same user **replaces** `reactionType`. Also broadcasts **`reaction_added`** on Socket.IO to the conversation room (same payload shape as below).
+
+**Body**
+
+| Field | Type | Rules |
+|--------|------|--------|
+| `userId` | numeric string | Chat user profile id performing the reaction (must be a participant) |
+| `reactionType` | string | Non-empty after trim; max 128 chars (emoji or token, e.g. `thumbs_up`) |
+
+**201** — Prisma **`MessageReaction`** row (`id`, `messageId`, `chatUserId`, `reactionType`, timestamps, …). BigInt fields serialize as strings in JSON.
+
+**400** — Missing `reactionType`, invalid ids. **403** — Not a participant. **404** — Message not found or wrong conversation / tenant.
+
+### `DELETE /api/v1/chat/conversations/:conversationId/messages/:messageId/reactions`
+
+Removes **`userId`**’s reaction on that message, if any.
+
+**Query (required)**
+
+| Param | Type | Description |
+|--------|------|-------------|
+| `userId` | numeric string | Chat user whose reaction to remove |
+
+**200** — `data`: `{ "removed": true }` if a row was deleted, or `{ "removed": false }` if there was no reaction. On successful delete, the server also emits **`reaction_removed`** on Socket.IO: `{ messageId, conversationId, userId }`.
+
+**400** — Missing `userId` query parameter.
 
 ### `POST /api/v1/chat/conversations/:conversationId/messages/:messageId/translate`
 
@@ -508,7 +584,7 @@ JWT must be `typ: "tenant"`; `sub` must match the API key’s tenant. The server
 |--------|---------|--------|
 | `join_conversation` | `{ conversationId }` | Asserts access, joins `conversation:<conversationId>` |
 | `leave_conversation` | `{ conversationId }` | |
-| `send_message` | `{ conversationId, type, content }` | `type`: any Prisma `MessageType` the gateway allows (`TEXT`, `IMAGE`, `VOICE`, `VIDEO`, `FILE`, `LINK`, `OTHER`); non-empty `content` |
+| `send_message` | `{ conversationId, type, content, replyToMessageId? }` | `type`: any Prisma `MessageType` the gateway allows (`TEXT`, `IMAGE`, `VOICE`, `VIDEO`, `FILE`, `LINK`, `OTHER`); non-empty `content`; optional **`replyToMessageId`** (numeric string) same rules as REST |
 | `typing_start` | `{ conversationId }` | |
 | `typing_stop` | `{ conversationId }` | |
 | `react_message` | `{ conversationId, messageId, reactionType }` | |
@@ -522,8 +598,9 @@ Payloads are emitted to conversation subscribers (and tenant-wide for presence).
 
 | Event | When |
 |--------|------|
-| `message` | New message (same serialized shape as REST list/create: `attachments` from JSONB when present, etc.) |
+| `message` | New message (same serialized shape as REST list/create: `attachments`, `replyTo*`, `reactions`, etc., when present) |
 | `reaction_added` | `{ id, messageId, conversationId, userId, reactionType }` |
+| `reaction_removed` | `{ messageId, conversationId, userId }` — after REST `DELETE .../reactions` or socket `remove_reaction` |
 | `message_delivered` | `{ messageId, conversationId, userId, deliveredAt }` |
 | `message_read` | `{ messageId, conversationId, userId, readAt }` |
 | `user_typing` | `{ conversationId, userId, name }` |
@@ -549,6 +626,10 @@ Payloads are emitted to conversation subscribers (and tenant-wide for presence).
 |------|------|
 | Tenant feature flags & merge | `src/modules/tenants/tenant.constants.ts` |
 | REST message DTOs & attachment validation | `src/modules/chat/dtos/chat.dto.ts` |
+| Chat REST (messages, reactions, AI) | `src/modules/chat/controllers/chat.controller.ts` |
+| Messages, replies, reactions, serialization | `src/modules/chat/services/chat.service.ts` |
+| Socket wire events | `src/modules/chat/constants/chat-realtime.events.ts` |
 | Attachment JSONB mapping | `src/modules/chat/utils/message-attachment-stored.util.ts` |
 | Legacy `content` envelope (read paths) | `src/modules/chat/utils/message-media-envelope.util.ts` |
+| Presigned S3 upload | `src/modules/upload/upload.controller.ts`, `src/modules/upload/upload.service.ts` |
 | Prisma `Message` + `Tenant` | `prisma/schema.prisma` |
