@@ -49,6 +49,8 @@ Same `Authorization: Bearer <jwt>` header. Obtain JWT with `POST /api/v1/auth/te
 
 `ApiKeyGuard` authenticates with **`X-Api-Key: <accessKey>:<secretKey>`** (colon-separated in one header). Invalid or missing credentials return **401**.
 
+**Mounting:** `ChatModule` is imported by **`SocketModule`** (see `src/app/app.module.ts`, `src/modules/socket/socket.module.ts`) as well as by **`RoutesUserModule`** (`src/router/routes/routes.user.module.ts`). Nest registers the chat HTTP controllers once at controller path **`chat`**, so in this app they are reachable at **`/api/v1/chat/...`** (global prefix `api`, URI version `v1`), not under `/api/v1/users/...`.
+
 ### Tenant scope (chat)
 
 Chat routes are scoped by the **API key’s tenant** (`request.userId` from the key row). There is no separate company header.
@@ -82,7 +84,7 @@ Authenticates a **tenant** account (email + password).
 | `email` | string | Valid email |
 | `password` | string | Min length 8 |
 
-**200** — `data`:
+**201** (Nest default for `POST`) — `data`:
 
 ```json
 {
@@ -90,11 +92,43 @@ Authenticates a **tenant** account (email + password).
   "id": "<tenant id>",
   "email": "<string>",
   "name": "<string>",
-  "settings": {}
+  "settings": {
+    "imageUpload": true,
+    "audioAttachmentUpload": true,
+    "voiceRecording": true,
+    "createGroup": true,
+    "editGroup": true,
+    "chatListSearch": true,
+    "translateMessages": true,
+    "voiceTranscription": true,
+    "messageReactions": true,
+    "deleteConversation": true
+  }
 }
 ```
 
+`settings` is always returned as the full [tenant feature flag](#tenant-settings-feature-flags) object (missing DB keys default to `true`). Shape is defined in code as `TenantFeatureSettings` in `src/modules/tenants/tenant.constants.ts` (`mergeTenantFeatureSettings`, `DEFAULT_TENANT_SETTINGS`).
+
 **401** — Unknown email or bad password (`Invalid credentials`).
+
+### Tenant `settings` (feature flags)
+
+Stored on `Tenant.settings` as JSON (`jsonb`-backed in PostgreSQL). **Admin** `POST /api/v1/admin/tenants` persists `DEFAULT_TENANT_SETTINGS` for new tenants (all flags **`true`**). **Login** and **shared/me** merge stored JSON with defaults so every response includes all keys.
+
+| Key | Meaning |
+|-----|--------|
+| `imageUpload` | Allow image uploads in chat |
+| `audioAttachmentUpload` | Allow audio file attachments |
+| `voiceRecording` | Allow voice recording |
+| `createGroup` | Allow creating group conversations |
+| `editGroup` | Allow editing group metadata |
+| `chatListSearch` | Enable chat list search |
+| `translateMessages` | Enable message translation (when server supports it) |
+| `voiceTranscription` | Enable voice / audio transcription |
+| `messageReactions` | Enable message reactions |
+| `deleteConversation` | Allow deleting conversations |
+
+**Note:** Flags are exposed to clients; enforcement in chat routes is not wired in this backend yet—add guards if tenants should be restricted server-side.
 
 ---
 
@@ -104,7 +138,7 @@ Authenticates a **tenant** account (email + password).
 
 **Body:** `email`, `password` (same rules as tenant login).
 
-**200** — `data`:
+**201** — `data`:
 
 ```json
 {
@@ -142,9 +176,28 @@ All require admin Bearer JWT.
 
 **Update body** (all optional): `name`, `email`, `password` (same constraints when present).
 
-**Create/update 200** — public tenant shape: `id`, `email`, `name`, `settings`, `createdAt`.
+**Create 201** — public tenant shape: `id`, `email`, `name`, `settings`, `createdAt`. `settings` is the merged [tenant feature flags](#tenant-settings-feature-flags) object (same as tenant login).
+
+**Update 200** — same public tenant shape as create.
 
 **List 200** — `data`: array of public tenant shapes (same fields as create/update).
+
+**Example** — create tenant response `data.settings` (all `true` by default):
+
+```json
+{
+  "imageUpload": true,
+  "audioAttachmentUpload": true,
+  "voiceRecording": true,
+  "createGroup": true,
+  "editGroup": true,
+  "chatListSearch": true,
+  "translateMessages": true,
+  "voiceTranscription": true,
+  "messageReactions": true,
+  "deleteConversation": true
+}
+```
 
 **Delete 200** — `data`: `{ "deleted": true }`.
 
@@ -162,6 +215,8 @@ All require admin Bearer JWT.
 
 **Create body (optional):** `name`, `scopes` (string array), `expiresAt` (ISO date string).
 
+**HTTP:** `POST` create and `POST` …`/revoke` return **201** (Nest default for `POST`). `GET` list returns **200**.
+
 ---
 
 ## Shared (tenant JWT) — `/api/v1/shared`
@@ -170,7 +225,30 @@ All require admin Bearer JWT.
 
 Tenant Bearer JWT + tenant-only guard.
 
-**200** — `data`: `{ id, email, name, settings, createdAt }`.
+**200** — `data`: `{ id, email, name, settings, createdAt }`. `settings` uses the same [tenant feature flags](#tenant-settings-feature-flags) shape as tenant login (merged defaults).
+
+**Example** — `data` (abbreviated):
+
+```json
+{
+  "id": "1",
+  "email": "tenant@example.com",
+  "name": "Acme",
+  "settings": {
+    "imageUpload": true,
+    "audioAttachmentUpload": true,
+    "voiceRecording": true,
+    "createGroup": true,
+    "editGroup": true,
+    "chatListSearch": true,
+    "translateMessages": true,
+    "voiceTranscription": true,
+    "messageReactions": true,
+    "deleteConversation": true
+  },
+  "createdAt": "2026-01-01T00:00:00.000Z"
+}
+```
 
 ### API keys (own keys) — `/api/v1/shared/api-keys`
 
@@ -183,6 +261,8 @@ Tenant Bearer JWT required.
 | `POST` | `/api/v1/shared/api-keys/:id/revoke` |
 
 Same DTOs and semantics as admin key routes; `:id` is the API key row id.
+
+**HTTP:** `GET` **200**; `POST` create and `POST` …`/revoke` **201**.
 
 ---
 
@@ -214,6 +294,8 @@ Registers a **ChatUser** for this tenant (**get-or-create**). If a user already 
 ### `GET /api/v1/chat/users`
 
 Lists all chat users for this tenant, newest first.
+
+**200** — `data`: array of `ChatUser` rows for the tenant.
 
 ### `POST /api/v1/chat/conversations`
 
@@ -271,18 +353,22 @@ If omitted, returns all conversations for this tenant. Ordered by `createdAt` de
 }
 ```
 
-Messages are ordered **newest first** (`createdAt` desc). Soft-deleted messages are omitted. Each item is a serialized message:
+Messages are ordered **newest first** (`createdAt` desc). Soft-deleted messages are omitted. Each item is a serialized message (same shape as `POST .../messages` returns):
 
 | Field | Notes |
 |--------|--------|
-| `id`, `conversationId`, `tenantId`, `senderId`, `type`, `content`, `createdAt`, `deletedAt` | As stored |
+| `id`, `conversationId`, `tenantId`, `senderId`, `type`, `content`, `createdAt`, `deletedAt` | `content` is plain text, caption for uploads, or a single legacy HTTPS URL. Older rows may still store a **JSON media envelope** in `content`; see `attachments` column below. |
+| `attachments` | **Optional.** Array read from PostgreSQL **`jsonb`** on `messages.attachments`. Each item: `{ "fileUrl", "size"?, "fileType"?, "fileName"?, "mimeType"?, "kind"? }` (`kind`: client hint such as `live_recording`, `camera`, `upload`). Omitted in JSON when empty. For legacy envelope-only rows (no column data), the API still returns this array derived from `content` when it parses as a v1 envelope. |
+| `translatedMessage`, `transcribedMessage` | Optional strings when AI endpoints have been used (see translate/transcribe below). |
 | `sender` | `{ id, name }` when loaded |
 
-There is **no** automatic signed `url` field in the current serializer; `content` is stored text/object reference as persisted.
+There is **no** automatic signed `url` field; clients use **`attachments[].fileUrl`** (HTTPS URLs you supply, e.g. presigned object storage).
 
 ### `POST /api/v1/chat/conversations/:conversationId/messages`
 
-REST send (also broadcasts over Socket.IO to the conversation room).
+**HTTP:** **201 Created** (Nest default for `POST`).
+
+REST send (also broadcasts over Socket.IO to the conversation room). Request body is JSON (`Content-Type: application/json`). **Raw multipart file upload is not handled on this route**; upload binaries with your storage provider, then send **HTTPS** file URLs in `attachments`.
 
 **Body**
 
@@ -290,9 +376,93 @@ REST send (also broadcasts over Socket.IO to the conversation room).
 |--------|------|--------|
 | `senderId` | numeric string | Chat user id sending the message (must be participant, same tenant) |
 | `type` | enum | `TEXT`, `IMAGE`, `VOICE`, `VIDEO`, `FILE`, `LINK`, `OTHER` (Prisma `MessageType`) |
-| `content` | string | 1–50000 chars |
+| `content` | string | Optional if `attachments` is non-empty. Max 50000 chars. Plain text, caption for media, or a **single** legacy HTTPS media URL (e.g. voice file) when not using `attachments`. **Required** (non-empty after trim) when `attachments` is omitted or empty. |
+| `attachments` | array | Optional. Up to **50** items in one request, in any order — images, videos, audio, documents, live recordings, etc. Allowed for **any** `MessageType` (often **`OTHER`** for mixed bundles). |
 
-**201** — created message (Prisma include `sender`).
+**`attachments[]` item**
+
+| Field | Type | Rules |
+|--------|------|--------|
+| `url` | string | Required on each item. **HTTPS only** (`https://...`), max 2048 chars (e.g. presigned GET URL). |
+| `mimeType` | string | Optional, max 128 chars (e.g. `image/jpeg`, `video/mp4`, `audio/mp4`). |
+| `fileName` | string | Optional, max 512 chars. |
+| `byteSize` | integer | Optional, non-negative (uncompressed size if known). |
+| `kind` | string | Optional, max 64 chars. Client-defined hint, e.g. `upload`, `live_recording`, `camera`, `screen`, `voice_note`. |
+
+**Validation:** You must send at least one of: non-empty `content` (after trim), or one or more `attachments`. When `attachments` is present, **`content`** is stored as the **caption only** (may be empty), and each item is stored in **`messages.attachments`** as JSONB (see response shape below).
+
+**Example** (request uses `url` / `byteSize`; response uses `fileUrl` / `size`):
+
+```json
+{
+  "senderId": "1",
+  "type": "IMAGE",
+  "content": "See wound site",
+  "attachments": [
+    {
+      "url": "https://cdn.example.com/tenant/msg/abc.jpg",
+      "mimeType": "image/jpeg",
+      "fileName": "photo.jpg",
+      "byteSize": 245678
+    }
+  ]
+}
+```
+
+**201** — **serialized** message (same shape as each element in `GET .../messages` → `data.items`). When files were sent, **`attachments`** mirrors the JSONB payload (`fileUrl`, optional `size`, `fileType`, `fileName`, `mimeType`, `kind`). Request field `url` is stored as `fileUrl`; `byteSize` as `size`.
+
+**Database:** The `messages.attachments` column must exist as **`jsonb`** (nullable). Sync with `npx prisma migrate deploy` / `prisma migrate dev` after schema changes, or `npx prisma db push` in development. Without the column, creates that include `attachments` fail at runtime.
+
+**Example — mixed bundle** (`type` often `OTHER`; up to 50 items):
+
+```json
+{
+  "senderId": "12",
+  "type": "OTHER",
+  "content": "Visit notes",
+  "attachments": [
+    { "url": "https://cdn.example.com/w.jpg", "mimeType": "image/jpeg", "kind": "camera" },
+    { "url": "https://cdn.example.com/walk.m4a", "mimeType": "audio/mp4", "kind": "live_recording" },
+    { "url": "https://files.example.com/lab.pdf", "mimeType": "application/pdf", "kind": "upload" }
+  ]
+}
+```
+
+**Socket parity:** The `send_message` socket event still accepts only `{ conversationId, type, content }`. It does not populate `messages.attachments`; use REST for structured uploads, or mirror legacy JSON in `content` if you must use the socket only.
+
+### `POST /api/v1/chat/conversations/:conversationId/messages/:messageId/translate`
+
+**HTTP:** **200 OK** (not 201).
+
+Runs English translation for the message (OpenAI). **Requires** `OPENAI_API_KEY` (and related config) on the server.
+
+**Query (optional)**
+
+| Param | Type | Description |
+|--------|------|-------------|
+| `force` | boolean | If truthy, recomputes translation even when `translatedMessage` is already set. Query accepts `true` / `false` or coerced values (`1`, string `"true"`). |
+
+**200** — serialized message (same fields as list items), with `translatedMessage` populated or updated.
+
+**400 / 404 / 503** — Bad input, message or conversation not found, or OpenAI unavailable.
+
+**Note:** For hosted audio (e.g. `VOICE` with HTTPS in `content`, or the first **audio-like** row in `attachments` — `mimeType` `audio/*`, `kind` containing `recording` / `voice`, or common audio extensions), translate the **transcribed** text: call **transcribe** first (Whisper uses the first matching URL in a mixed bundle), then translate.
+
+### `POST /api/v1/chat/conversations/:conversationId/messages/:messageId/transcribe`
+
+**HTTP:** **200 OK** (not 201).
+
+Transcribes or normalizes message text (OpenAI: Whisper for hosted audio when applicable, chat model for plain text). **Requires** `OPENAI_API_KEY` where used.
+
+**Query (optional)**
+
+| Param | Type | Description |
+|--------|------|-------------|
+| `force` | boolean | Same coercion rules as translate (`MessageAiQueryDto` in `chat.dto.ts`). |
+
+**200** — serialized message with `transcribedMessage` populated or updated.
+
+**400 / 404 / 503** — Same idea as translate (hosted voice URLs must fall under configured `AWS_BASE_URL` for URL-based transcription).
 
 ### `POST /api/v1/chat/users/:userId/push-tokens`
 
@@ -306,7 +476,7 @@ Registers or refreshes a push token for the given chat user.
 | `platform` | enum | `IOS`, `ANDROID`, `WEB` |
 | `deviceId` | string | Optional |
 
-**200/201** — upserted `ChatUserPushToken` row.
+**201** — upserted `ChatUserPushToken` row (Nest default for `POST`; implemented as Prisma `upsert`).
 
 ---
 
@@ -322,7 +492,7 @@ Canonical event strings live in `src/modules/chat/constants/chat-realtime.events
 
 2. **Optional full chat session** — to join tenant presence and use `join_conversation` / `send_message` / receipts / typing / reactions, also send **both**:
 
-- `token` — tenant JWT in **`handshake.auth.token` only** (the gateway does **not** read `Authorization: Bearer …` on the WebSocket handshake)
+- `token` — tenant JWT in **`handshake.auth.token` only** (the gateway does not read `Authorization` on the socket handshake)
 - `userId` **or** `chatUserId` — chat profile id (`ChatUser.id`, numeric string)
 
 JWT must be `typ: "tenant"`; `sub` must match the API key’s tenant. The server verifies the profile is **ACTIVE** in that tenant. If the JWT or profile id is missing, the socket may still **connect** (API key only), but chat events that require a profile will respond with errors such as `"Unauthorized"`.
@@ -352,7 +522,7 @@ Payloads are emitted to conversation subscribers (and tenant-wide for presence).
 
 | Event | When |
 |--------|------|
-| `message` | New message (serialized like REST `serializeMessage`) |
+| `message` | New message (same serialized shape as REST list/create: `attachments` from JSONB when present, etc.) |
 | `reaction_added` | `{ id, messageId, conversationId, userId, reactionType }` |
 | `message_delivered` | `{ messageId, conversationId, userId, deliveredAt }` |
 | `message_read` | `{ messageId, conversationId, userId, readAt }` |
@@ -373,22 +543,12 @@ Payloads are emitted to conversation subscribers (and tenant-wide for presence).
 | `DevicePlatform` | `IOS`, `ANDROID`, `WEB` |
 | `ConversationType` | `DIRECT`, `GROUP`, `SUPPORT` |
 
----
+### Related source (for implementers)
 
-#API JSONS
-
-## ADMIN API JSON
-
-{"openapi":"3.0.0","paths":{"/api/v1/admin/login":{"post":{"operationId":"AdminAuthController_login_v1","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/AdminLoginDto"}}}},"responses":{"201":{"description":""}},"summary":"Admin login (JWT for admin routes)","tags":["Admin Auth"]}},"/api/v1/admin/me":{"get":{"operationId":"AdminAuthController_me_v1","parameters":[],"responses":{"200":{"description":""}},"security":[{"bearer":[]}],"summary":"Current admin profile","tags":["Admin Auth"]}},"/api/v1/admin/tenants":{"get":{"operationId":"TenantsAdminController_list_v1","parameters":[],"responses":{"200":{"description":""}},"security":[{"bearer":[]}],"summary":"List all tenants","tags":["Tenants (Admin)"]},"post":{"operationId":"TenantsAdminController_create_v1","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateTenantDto"}}}},"responses":{"201":{"description":""}},"security":[{"bearer":[]}],"tags":["Tenants (Admin)"]}},"/api/v1/admin/tenants/{id}":{"patch":{"operationId":"TenantsAdminController_update_v1","parameters":[{"name":"id","required":true,"in":"path","schema":{"type":"string"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/UpdateTenantDto"}}}},"responses":{"200":{"description":""}},"security":[{"bearer":[]}],"tags":["Tenants (Admin)"]},"delete":{"operationId":"TenantsAdminController_remove_v1","parameters":[{"name":"id","required":true,"in":"path","schema":{"type":"string"}}],"responses":{"200":{"description":""}},"security":[{"bearer":[]}],"tags":["Tenants (Admin)"]}},"/api/v1/admin/tenants/{userId}/api-keys":{"get":{"operationId":"ApiKeysAdminController_list_v1","parameters":[{"name":"userId","required":true,"in":"path","description":"Tenant id","schema":{"type":"string"}}],"responses":{"200":{"description":""}},"security":[{"bearer":[]}],"summary":"List API keys for a tenant","tags":["Admin API Keys"]},"post":{"operationId":"ApiKeysAdminController_create_v1","parameters":[{"name":"userId","required":true,"in":"path","description":"Tenant id","schema":{"type":"string"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateApiKeyDto"}}}},"responses":{"201":{"description":""}},"security":[{"bearer":[]}],"summary":"Create API key for a tenant","tags":["Admin API Keys"]}},"/api/v1/admin/tenants/{userId}/api-keys/{id}/revoke":{"post":{"operationId":"ApiKeysAdminController_revoke_v1","parameters":[{"name":"userId","required":true,"in":"path","description":"Tenant id","schema":{"type":"string"}},{"name":"id","required":true,"in":"path","description":"API key id","schema":{"type":"string"}}],"responses":{"201":{"description":""}},"security":[{"bearer":[]}],"summary":"Revoke an API key for a tenant","tags":["Admin API Keys"]}}},"info":{"title":"Admin API","description":"Admin JWT routes: profile and tenant management.","version":"1.0","contact":{}},"tags":[],"servers":[],"components":{"securitySchemes":{"bearer":{"scheme":"bearer","bearerFormat":"JWT","type":"http"}},"schemas":{"AdminLoginDto":{"type":"object","properties":{"email":{"type":"string","example":"admin@example.com"},"password":{"type":"string","minLength":8}},"required":["email","password"]},"CreateTenantDto":{"type":"object","properties":{"name":{"type":"string","maxLength":200},"email":{"type":"string"},"password":{"type":"string","minLength":8}},"required":["name","email","password"]},"UpdateTenantDto":{"type":"object","properties":{"name":{"type":"string","maxLength":200},"email":{"type":"string"},"password":{"type":"string","minLength":8}}},"CreateApiKeyDto":{"type":"object","properties":{"name":{"type":"string","maxLength":120},"scopes":{"type":"array","items":{"type":"string"}},"expiresAt":{"type":"string"}}}}}}
-
-
-
-## TENANT API JSON
-
-{"openapi":"3.0.0","paths":{"/api/v1/auth/tenant/login":{"post":{"operationId":"AuthController_tenantLogin_v1","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TenantLoginDto"}}}},"responses":{"201":{"description":""}},"tags":["Auth"]}},"/api/v1/system/health":{"get":{"operationId":"AppController_health_v1","parameters":[],"responses":{"200":{"description":""}},"tags":[""]}},"/api/v1/shared/me":{"get":{"operationId":"TenantsSelfController_me_v1","parameters":[],"responses":{"200":{"description":""}},"security":[{"bearer":[]}],"tags":["shared"]}},"/api/v1/shared/api-keys":{"get":{"operationId":"ApiKeyController_list_v1","parameters":[],"responses":{"200":{"description":""}},"security":[{"bearer":[]}],"tags":["shared"]},"post":{"operationId":"ApiKeyController_create_v1","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateApiKeyDto"}}}},"responses":{"201":{"description":""}},"security":[{"bearer":[]}],"tags":["shared"]}},"/api/v1/shared/api-keys/{id}/revoke":{"post":{"operationId":"ApiKeyController_revoke_v1","parameters":[{"name":"id","required":true,"in":"path","schema":{"type":"string"}}],"responses":{"201":{"description":""}},"security":[{"bearer":[]}],"tags":["shared"]}}},"info":{"title":"Tenant API","description":"Routes for tenant applications: auth, system, and shared resources (profile, API keys).\n\nChat REST lives under `/api/v1/chat/...` (see the Chat OpenAPI document); it uses `X-Api-Key: accessKey:secretKey`.","version":"1.0","contact":{}},"tags":[],"servers":[],"components":{"securitySchemes":{"bearer":{"scheme":"bearer","bearerFormat":"JWT","type":"http"},"apiKey":{"type":"apiKey","in":"header","name":"X-Api-Key"}},"schemas":{"TenantLoginDto":{"type":"object","properties":{"email":{"type":"string","example":"tenant@example.com"},"password":{"type":"string","minLength":8}},"required":["email","password"]},"CreateApiKeyDto":{"type":"object","properties":{"name":{"type":"string","maxLength":120},"scopes":{"type":"array","items":{"type":"string"}},"expiresAt":{"type":"string"}}}}}}
-
-
-
-## CHAT API JSON
-
-{"openapi":"3.0.0","paths":{"/api/v1/chat/tenant":{"get":{"operationId":"ChatUsersController_getTenant_v1","parameters":[],"responses":{"200":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]}},"/api/v1/chat/users":{"post":{"operationId":"ChatUsersController_createUser_v1","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateUserDto"}}}},"responses":{"201":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]},"get":{"operationId":"ChatUsersController_listUsers_v1","parameters":[],"responses":{"200":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]}},"/api/v1/chat/conversations":{"post":{"operationId":"ChatController_createConversation_v1","parameters":[],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateConversationDto"}}}},"responses":{"201":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]},"get":{"operationId":"ChatController_listConversations_v1","parameters":[{"name":"forUserId","required":false,"in":"query","schema":{"type":"string"}}],"responses":{"200":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]}},"/api/v1/chat/conversations/{conversationId}/participants":{"post":{"operationId":"ChatController_addParticipant_v1","parameters":[{"name":"conversationId","required":true,"in":"path","schema":{"type":"string"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/AddParticipantDto"}}}},"responses":{"201":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]}},"/api/v1/chat/conversations/{conversationId}/messages":{"get":{"operationId":"ChatController_listMessages_v1","parameters":[{"name":"conversationId","required":true,"in":"path","schema":{"type":"string"}},{"name":"page","required":false,"in":"query","schema":{"minimum":1,"default":1,"type":"number"}},{"name":"pageSize","required":false,"in":"query","schema":{"minimum":1,"maximum":100,"default":20,"type":"number"}}],"responses":{"200":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]},"post":{"operationId":"ChatController_postMessage_v1","parameters":[{"name":"conversationId","required":true,"in":"path","schema":{"type":"string"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateRestMessageDto"}}}},"responses":{"201":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]}},"/api/v1/chat/users/{userId}/push-tokens":{"post":{"operationId":"ChatController_registerPush_v1","parameters":[{"name":"userId","required":true,"in":"path","schema":{"type":"string"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/RegisterPushTokenDto"}}}},"responses":{"201":{"description":""}},"security":[{"apiKey":[]}],"tags":["chat"]}}},"info":{"title":"Chat API","description":"Conversations and messaging under `/api/v1/chat/...`. Authenticate with `X-Api-Key: accessKey:secretKey` (`ApiKeyGuard`).","version":"1.0","contact":{}},"tags":[],"servers":[],"components":{"securitySchemes":{"apiKey":{"type":"apiKey","in":"header","name":"X-Api-Key"}},"schemas":{"CreateUserDto":{"type":"object","properties":{"providerId":{"type":"string","description":"Identity provider or source system key for this user (stored as `provider_id`)."},"providerUserId":{"type":"string","description":"User id from that provider / your system (stored as `provider_user_id`)."},"email":{"type":"string"},"name":{"type":"string","description":"Display name; defaults to email local-part if omitted."}},"required":["providerId","providerUserId","email"]},"CreateConversationDto":{"type":"object","properties":{"type":{"type":"string","enum":["DIRECT","GROUP","SUPPORT"]},"creatorUserId":{"type":"string","description":"Required when type is GROUP. This chat user is added as a participant with ADMIN role."},"participantIds":{"description":"GROUP: extra members besides `creatorUserId`. DIRECT / SUPPORT: optional initial participants (all MEMBER); omit for an empty thread and add via `POST .../participants`.","type":"array","items":{"type":"string"}}}},"AddParticipantDto":{"type":"object","properties":{"userId":{"type":"string","description":"Chat user profile id (numeric string)."},"actorUserId":{"type":"string","description":"Chat user performing this add. Required for group conversations; must be a participant with ADMIN role."}},"required":["userId"]},"CreateRestMessageDto":{"type":"object","properties":{"type":{"type":"string","enum":["TEXT","IMAGE","VOICE","VIDEO","FILE","LINK","OTHER"]},"content":{"type":"string"},"senderId":{"type":"string","description":"Chat user profile id (numeric string)."}},"required":["type","content","senderId"]},"RegisterPushTokenDto":{"type":"object","properties":{"token":{"type":"string"},"platform":{"type":"string","enum":["IOS","ANDROID","WEB"]},"deviceId":{"type":"string"}},"required":["token","platform"]}}}}
+| Area | Path |
+|------|------|
+| Tenant feature flags & merge | `src/modules/tenants/tenant.constants.ts` |
+| REST message DTOs & attachment validation | `src/modules/chat/dtos/chat.dto.ts` |
+| Attachment JSONB mapping | `src/modules/chat/utils/message-attachment-stored.util.ts` |
+| Legacy `content` envelope (read paths) | `src/modules/chat/utils/message-media-envelope.util.ts` |
+| Prisma `Message` + `Tenant` | `prisma/schema.prisma` |

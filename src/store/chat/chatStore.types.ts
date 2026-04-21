@@ -16,10 +16,8 @@ export type WidgetRailPane = WidgetPanelType;
 export type MessageSpeechUiState = {
   transcript?: string;
   translated?: string;
-  targetLang?: string;
   loading?: 'transcribe' | 'translate';
   error?: string;
-  translateToolsOpen?: boolean;
 };
 
 export const chatInitialState = {

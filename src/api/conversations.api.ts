@@ -1,7 +1,12 @@
 import { API_PATHS } from '../constants/api.constant';
 import { apiService } from '../lib/api-service';
 import type { Conversation, Message, MessagesPage } from '../types/chat';
-import type { VitafyConversationApi, VitafyMessageApi, VitafyMessagesPageApi } from '../types/vitafy.types';
+import type {
+  VitafyConversationApi,
+  VitafyMessageApi,
+  VitafyMessagesPageApi,
+  VitafyPostMessageBody
+} from '../types/vitafy.types';
 import { mapApiMessageToMessage, mapConversationFromApi, mapMessagesPageFromApi } from '../utils/vitafy-chat.utils';
 
 export const listConversations = (forUserId: string): Promise<Conversation[]> =>
@@ -93,8 +98,36 @@ export const getMessagesPage = (
 
 export const postConversationRestMessage = (
   conversationId: string,
-  body: { type: string; content: string; senderId: string }
+  body: VitafyPostMessageBody
 ): Promise<Message> =>
   apiService
     .post<VitafyMessageApi>(API_PATHS.CHAT.conversationMessages(conversationId), body)
+    .then(mapApiMessageToMessage);
+
+/** `POST .../messages/:messageId/transcribe` — returns updated serialized message (200). */
+export const postMessageTranscribe = (
+  conversationId: string,
+  messageId: string,
+  params?: { force?: boolean }
+): Promise<Message> =>
+  apiService
+    .post<VitafyMessageApi>(
+      API_PATHS.CHAT.conversationMessageTranscribe(conversationId, messageId),
+      undefined,
+      params?.force ? { params: { force: 'true' } } : undefined
+    )
+    .then(mapApiMessageToMessage);
+
+/** `POST .../messages/:messageId/translate` — returns updated serialized message (200). */
+export const postMessageTranslate = (
+  conversationId: string,
+  messageId: string,
+  params?: { force?: boolean }
+): Promise<Message> =>
+  apiService
+    .post<VitafyMessageApi>(
+      API_PATHS.CHAT.conversationMessageTranslate(conversationId, messageId),
+      undefined,
+      params?.force ? { params: { force: 'true' } } : undefined
+    )
     .then(mapApiMessageToMessage);

@@ -1,13 +1,11 @@
 /**
- * Actions that talk to the backend: REST, uploads, socket acks, and speech APIs.
+ * Actions that talk to the backend: REST, uploads, socket acks, and chat AI routes.
  */
 import type { FormEvent } from 'react';
 import * as conversationsApi from '../../api/conversations.api';
 import { getTenantUsers } from '../../api/users.api';
 import { uploadFileRequest } from '../../api/upload.api';
-import { transcribeSpeechRequest, translateTextRequest } from '../../api/speech.api';
-import { fetchMediaBlob } from '../../utils/media.utils';
-import { isGlobalConversation, normalizeMessage } from '../../utils/chat.utils';
+import { isGlobalConversation, isLikelyJwt, normalizeMessage } from '../../utils/chat.utils';
 import { WidgetPanelType, type Message, type MessageReaction, type MessageType } from '../../types/chat';
 import { SELECTED_CONVERSATION_STORAGE_KEY } from '../../constants/session.constants';
 import { CLIENT_GOING_OFFLINE_EVENT } from '../../features/chat/chat.constants';
@@ -16,8 +14,6 @@ import { useAuthStore } from '../useAuthStore';
 import type { ChatStore } from './chatStore.types';
 import { findDirectConversation } from './chatStore.utils';
 import type { TenantUser } from '../../types/chat';
-import { isLikelyJwt } from '../../utils/chat.utils';
-
 function isWidgetLikeSessionToken(token: string): boolean {
   // Widget embed can use a non-JWT session marker while still using API-key chat REST.
   return Boolean(token) && !isLikelyJwt(token);
@@ -331,8 +327,16 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
           }
           message = await conversationsApi.postConversationRestMessage(selectedConversationId, {
             type,
-            content: uploaded.url,
-            senderId: user.id
+            senderId: user.id,
+            attachments: [
+              {
+                url: uploaded.url,
+                mimeType: file.type || undefined,
+                fileName: file.name || undefined,
+                byteSize: file.size,
+                kind: 'upload'
+              }
+            ]
           });
         } else {
           message = await chatEmitWithAck<Message>('send_message', {
@@ -436,18 +440,30 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
     },
 
     handleTranscribeVoiceMessage: async (message) => {
-      const token = useAuthStore.getState().token;
-      if (!token) {
-        get().setError('Sign in required');
+      const conversationId = message.conversationId || get().selectedConversationId;
+      if (!conversationId) {
+        get().setError('No conversation selected');
         return;
       }
       const id = message.id;
       get().patchMessageSpeechUi(id, { loading: 'transcribe', error: undefined });
       try {
-        const blob = await fetchMediaBlob(message.content, token);
-        const out = await transcribeSpeechRequest(blob, { filename: 'message.webm' });
-        const text = out.data?.text ?? '';
+        const updated = await conversationsApi.postMessageTranscribe(conversationId, id);
+        const text = updated.transcribedMessage?.trim() ?? '';
         get().patchMessageSpeechUi(id, { loading: undefined, transcript: text });
+        get().setMessages((previous) =>
+          previous.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  transcribedMessage: updated.transcribedMessage,
+                  translatedMessage: updated.translatedMessage ?? m.translatedMessage,
+                  content: updated.content,
+                  attachments: updated.attachments?.length ? updated.attachments : m.attachments
+                }
+              : m
+          )
+        );
       } catch (err) {
         get().patchMessageSpeechUi(id, {
           loading: undefined,
@@ -456,24 +472,34 @@ export function buildChatRemote(_set: SetChat, get: () => ChatStore): Partial<Ch
       }
     },
 
-    handleTranslateForMessage: async (message, sourceText, targetLanguage) => {
-      const token = useAuthStore.getState().token;
-      if (!token) {
-        get().setError('Sign in required');
-        return;
-      }
-      if (!sourceText.trim()) {
+    handleTranslateForMessage: async (message, _sourceText, _targetLanguage) => {
+      const conversationId = message.conversationId || get().selectedConversationId;
+      if (!conversationId) {
+        get().setError('No conversation selected');
         return;
       }
       const id = message.id;
       get().patchMessageSpeechUi(id, { loading: 'translate', error: undefined });
       try {
-        const out = await translateTextRequest({
-          text: sourceText,
-          targetLanguage
+        const updated = await conversationsApi.postMessageTranslate(conversationId, id);
+        const translated = updated.translatedMessage?.trim() ?? '';
+        get().patchMessageSpeechUi(id, {
+          loading: undefined,
+          translated
         });
-        const translated = out.data?.translatedText ?? '';
-        get().patchMessageSpeechUi(id, { loading: undefined, translated });
+        get().setMessages((previous) =>
+          previous.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  translatedMessage: updated.translatedMessage,
+                  transcribedMessage: updated.transcribedMessage ?? m.transcribedMessage,
+                  content: updated.content,
+                  attachments: updated.attachments?.length ? updated.attachments : m.attachments
+                }
+              : m
+          )
+        );
       } catch (err) {
         get().patchMessageSpeechUi(id, {
           loading: undefined,

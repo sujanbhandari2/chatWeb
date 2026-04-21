@@ -2,6 +2,7 @@ import type { LegacyRef } from 'react';
 import { useChatStore } from '../../../store/useChatStore';
 import { toAbsoluteMediaUrl } from '../../../utils/media.utils';
 import {
+  getMessagePrimaryMediaUrl,
   getMessageType,
   isGlobalConversation,
   isGroupConversation,
@@ -9,11 +10,7 @@ import {
   userDisplayName,
   userInitials
 } from '../../../utils/chat.utils';
-import {
-  QUICK_REACTION_EMOJIS,
-  TRANSLATE_TARGET_LANGS,
-  translateLangLabel
-} from '../../../features/chat/chat.constants';
+import { QUICK_REACTION_EMOJIS } from '../../../features/chat/chat.constants';
 import {
   AvatarWithPresence,
   IconAttach,
@@ -148,7 +145,7 @@ export function ChatThreadView(): JSX.Element {
                       disabled={deletingConversation}
                       onClick={() => void handleDeleteSelectedConversation()}
                     >
-                      {deletingConversation ? 'Deleting…' : 'Delete conversation'}
+                      {deletingConversation ? 'Deleting…' : 'Delete Chats'}
                     </button>
                   )}
                 </div>
@@ -263,10 +260,12 @@ export function ChatThreadView(): JSX.Element {
                         {message.deletedAt ? (
                           <em className="deleted">Message deleted</em>
                         ) : getMessageType(message) === 'IMAGE' ? (
-                          <img src={toAbsoluteMediaUrl(message.content)} alt="Uploaded" />
+                          <img src={toAbsoluteMediaUrl(getMessagePrimaryMediaUrl(message))} alt="Uploaded" />
                         ) : getMessageType(message) === 'VOICE' ? (
                           <>
-                            <audio controls src={toAbsoluteMediaUrl(message.content)} />
+                            {!speechUi?.translated && (
+                              <audio controls src={toAbsoluteMediaUrl(getMessagePrimaryMediaUrl(message))} />
+                            )}
                             {(features.voiceTranscription || features.translateMessages) && (
                               <div className="message-msgr-translation">
                                 {!speechUi?.transcript ? (
@@ -289,14 +288,12 @@ export function ChatThreadView(): JSX.Element {
                                   ) : null
                                 ) : (
                                   <>
-                                    <p className="message-msgr-transcript">{speechUi.transcript}</p>
+                                    {!speechUi.translated && (
+                                      <p className="message-msgr-transcript">{speechUi.transcript}</p>
+                                    )}
                                     {features.translateMessages &&
                                       (speechUi.translated ? (
                                         <>
-                                          <div className="message-msgr-divider" aria-hidden />
-                                          <p className="message-msgr-meta">
-                                            Translation · {translateLangLabel(speechUi.targetLang ?? 'en')}
-                                          </p>
                                           <p className="message-msgr-translation-body" aria-live="polite">
                                             {speechUi.translated}
                                           </p>
@@ -306,57 +303,29 @@ export function ChatThreadView(): JSX.Element {
                                             onClick={() =>
                                               patchMessageSpeechUi(message.id, {
                                                 translated: undefined,
-                                                error: undefined,
-                                                translateToolsOpen: false
+                                                error: undefined
                                               })
                                             }
                                           >
                                             See original
                                           </button>
                                         </>
-                                      ) : speechUi.translateToolsOpen ? (
-                                        <div className="message-msgr-tools">
-                                          <label className="visually-hidden" htmlFor={`trg-voice-${message.id}`}>
-                                            Language
-                                          </label>
-                                          <select
-                                            id={`trg-voice-${message.id}`}
-                                            className="message-msgr-select"
-                                            value={speechUi.targetLang ?? 'en'}
-                                            onChange={(event) =>
-                                              patchMessageSpeechUi(message.id, { targetLang: event.target.value })
-                                            }
-                                          >
-                                            {TRANSLATE_TARGET_LANGS.map((lang) => (
-                                              <option key={lang.code} value={lang.code}>
-                                                {lang.label}
-                                              </option>
-                                            ))}
-                                          </select>
-                                          <button
-                                            type="button"
-                                            className="message-msgr-link"
-                                            disabled={speechUi.loading === 'translate'}
-                                            onClick={() =>
-                                              void handleTranslateForMessage(
-                                                message,
-                                                speechUi.transcript ?? '',
-                                                speechUi.targetLang ?? 'en'
-                                              )
-                                            }
-                                          >
-                                            {speechUi.loading === 'translate' ? 'Translating…' : 'See translation'}
-                                          </button>
-                                        </div>
                                       ) : (
                                         <button
                                           type="button"
                                           className="message-msgr-link"
+                                          disabled={speechUi.loading === 'translate'}
                                           onClick={() =>
-                                            patchMessageSpeechUi(message.id, { translateToolsOpen: true })
+                                            void handleTranslateForMessage(
+                                              message,
+                                              speechUi.transcript ?? '',
+                                              'en'
+                                            )
                                           }
                                         >
-                                          See translation
+                                          {speechUi.loading === 'translate'
+                                            ? 'Translating…'
+                                            : 'Translate'}
                                         </button>
                                       ))}
                                     {speechUi.error && speechUi.transcript && !speechUi.translated ? (
@@ -371,15 +340,11 @@ export function ChatThreadView(): JSX.Element {
                           </>
                         ) : (
                           <>
-                            <p>{message.content}</p>
+                            {!speechUi?.translated && <p>{message.content}</p>}
                             {features.translateMessages && (
                               <div className="message-msgr-translation">
                                 {speechUi?.translated ? (
                                   <>
-                                    <div className="message-msgr-divider" aria-hidden />
-                                    <p className="message-msgr-meta">
-                                      Translation · {translateLangLabel(speechUi?.targetLang ?? 'en')}
-                                    </p>
                                     <p className="message-msgr-translation-body" aria-live="polite">
                                       {speechUi.translated}
                                     </p>
@@ -389,63 +354,33 @@ export function ChatThreadView(): JSX.Element {
                                       onClick={() =>
                                         patchMessageSpeechUi(message.id, {
                                           translated: undefined,
-                                          error: undefined,
-                                          translateToolsOpen: false
+                                          error: undefined
                                         })
                                       }
                                     >
                                       See original
                                     </button>
                                   </>
-                                ) : speechUi?.translateToolsOpen ? (
+                                ) : (
                                   <>
-                                    <div className="message-msgr-tools">
-                                      <label className="visually-hidden" htmlFor={`trg-text-${message.id}`}>
-                                        Language
-                                      </label>
-                                      <select
-                                        id={`trg-text-${message.id}`}
-                                        className="message-msgr-select"
-                                        value={speechUi?.targetLang ?? 'en'}
-                                        onChange={(event) =>
-                                          patchMessageSpeechUi(message.id, { targetLang: event.target.value })
-                                        }
-                                      >
-                                        {TRANSLATE_TARGET_LANGS.map((lang) => (
-                                          <option key={lang.code} value={lang.code}>
-                                            {lang.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <button
-                                        type="button"
-                                        className="message-msgr-link"
-                                        disabled={speechUi?.loading === 'translate'}
-                                        onClick={() =>
-                                          void handleTranslateForMessage(
-                                            message,
-                                            message.content,
-                                            speechUi?.targetLang ?? 'en'
-                                          )
-                                        }
-                                      >
-                                        {speechUi?.loading === 'translate' ? 'Translating…' : 'See translation'}
-                                      </button>
-                                    </div>
+                                    <button
+                                      type="button"
+                                      className="message-msgr-link"
+                                      disabled={speechUi?.loading === 'translate'}
+                                      onClick={() =>
+                                        void handleTranslateForMessage(message, message.content, 'en')
+                                      }
+                                    >
+                                      {speechUi?.loading === 'translate'
+                                        ? 'Translating…'
+                                        : 'Translate'}
+                                    </button>
                                     {speechUi?.error ? (
                                       <p className="message-msgr-error" role="alert">
                                         {speechUi.error}
                                       </p>
                                     ) : null}
                                   </>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="message-msgr-link"
-                                    onClick={() => patchMessageSpeechUi(message.id, { translateToolsOpen: true })}
-                                  >
-                                    See translation
-                                  </button>
                                 )}
                               </div>
                             )}

@@ -47,6 +47,33 @@ export type VitafyConversationApi = {
   participants: VitafyConversationParticipantApi[];
 };
 
+/** Serialized attachment from `messages.attachments` JSONB (`GET`/`POST` messages). */
+export type VitafyMessageAttachmentApi = {
+  fileUrl: string;
+  size?: number;
+  fileType?: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  kind?: string | null;
+};
+
+/** Request item for `POST .../conversations/:id/messages` (`url` → stored as `fileUrl`). */
+export type VitafyPostMessageAttachmentInput = {
+  url: string;
+  mimeType?: string;
+  fileName?: string;
+  byteSize?: number;
+  kind?: string;
+};
+
+export type VitafyPostMessageBody = {
+  senderId: string;
+  type: string;
+  /** Required when `attachments` is omitted or empty (non-empty after trim). */
+  content?: string;
+  attachments?: VitafyPostMessageAttachmentInput[];
+};
+
 export type VitafyMessageApi = {
   id: string;
   conversationId: string;
@@ -56,6 +83,9 @@ export type VitafyMessageApi = {
   content: string;
   createdAt: string;
   deletedAt?: string | null;
+  attachments?: VitafyMessageAttachmentApi[];
+  translatedMessage?: string | null;
+  transcribedMessage?: string | null;
   sender?: { id: string; name: string | null };
 };
 

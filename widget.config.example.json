@@ -18,7 +18,7 @@
     "panelBoxShadow": "0 12px 40px rgba(15, 23, 42, 0.18)"
   },
   "interactions": {
-    "defaultOpen": false,
+    "defaultOpen": true,
     "closeOnEscape": true,
     "closeOnClickOutside": true
   },

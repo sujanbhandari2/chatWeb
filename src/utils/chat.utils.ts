@@ -30,6 +30,26 @@ export function getMessageType(message: Message): MessageType {
   return message.messageType ?? message.type ?? 'TEXT';
 }
 
+type AttachmentUrlFields = { fileUrl?: unknown; url?: unknown };
+
+/** Prefer first attachment URL (REST JSONB), else legacy `content` URL or caption text. */
+export function getMessagePrimaryMediaUrl(message: Message): string {
+  for (const raw of message.attachments ?? []) {
+    if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const a = raw as AttachmentUrlFields;
+    const u = a.fileUrl ?? a.url;
+    if (typeof u === 'string') {
+      const t = u.trim();
+      if (t) {
+        return t;
+      }
+    }
+  }
+  return message.content?.trim() ?? '';
+}
+
 export function normalizeMessage(message: Message): Message {
   const raw = message.reactions ?? [];
   const reactions: MessageReaction[] = raw.map((r) => {

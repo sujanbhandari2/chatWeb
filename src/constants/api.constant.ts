@@ -22,7 +22,11 @@ export const API_PATHS = {
     conversationParticipants: (conversationId: string) =>
       `/v1/chat/conversations/${conversationId}/participants`,
     conversationMessages: (conversationId: string) =>
-      `/v1/chat/conversations/${conversationId}/messages`
+      `/v1/chat/conversations/${conversationId}/messages`,
+    conversationMessageTranscribe: (conversationId: string, messageId: string) =>
+      `/v1/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/transcribe`,
+    conversationMessageTranslate: (conversationId: string, messageId: string) =>
+      `/v1/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/translate`
   },
   /** Legacy non-Vitafy uploads / speech (unchanged paths). */
   UPLOAD: '/upload',

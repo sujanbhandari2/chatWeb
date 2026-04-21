@@ -101,6 +101,10 @@ export interface Message {
   tenantId?: string;
   type?: MessageType;
   deletedAt?: string | null;
+  /** From Vitafy `POST .../messages/:id/transcribe` and list/create payloads */
+  transcribedMessage?: string | null;
+  /** From Vitafy `POST .../messages/:id/translate` and list/create payloads */
+  translatedMessage?: string | null;
   deliveredReceipts?: DeliveredReceipt[];
   readReceipts?: ReadReceipt[];
 }

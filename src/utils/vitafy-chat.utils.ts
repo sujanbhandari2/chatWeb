@@ -105,9 +105,11 @@ export function mapApiMessageToMessage(m: VitafyMessageApi): Message {
     replyToMessageId: null,
     createdAt: m.createdAt,
     deletedAt: m.deletedAt ?? null,
-    attachments: [],
+    attachments: m.attachments?.length ? m.attachments : [],
     reactions: [],
-    tenantId: m.tenantId
+    tenantId: m.tenantId,
+    transcribedMessage: m.transcribedMessage,
+    translatedMessage: m.translatedMessage
   };
 }
 
